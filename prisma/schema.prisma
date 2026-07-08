@@ -3,24 +3,65 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-model Workout {
-  id        String       @id @default(cuid())
-  exercise  String
-  createdAt DateTime     @default(now())
-  sets      WorkoutSet[]
+enum WorkoutType {
+  SHOULDERS
+  BACK_BICEPS
+  CHEST_TRICEPS
+  LEGS
+  ABS
+  ARMS
+  BACK_CHEST
+  SHOULDERS_ARMS
+}
+
+model Exercise {
+  id          String         @id @default(cuid())
+  name        String
+  workoutType WorkoutType
+  createdAt   DateTime       @default(now())
+  entries     SessionEntry[]
+
+  @@unique([name, workoutType])
+}
+
+// One gym visit: picking a workout type starts a Session, and every
+// exercise logged afterwards is grouped under it until you're done.
+model Session {
+  id          String         @id @default(cuid())
+  workoutType WorkoutType
+  notes       String?
+  createdAt   DateTime       @default(now())
+  entries     SessionEntry[]
+
+  @@index([workoutType, createdAt])
+}
+
+// One exercise performed within a Session, holding its own sets.
+model SessionEntry {
+  id         String       @id @default(cuid())
+  sessionId  String
+  session    Session      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId String
+  exercise   Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  createdAt  DateTime     @default(now())
+  sets       WorkoutSet[]
+
+  @@index([sessionId])
+  @@index([exerciseId, createdAt])
 }
 
 model WorkoutSet {
-  id        String   @id @default(cuid())
-  weight    Int
-  reps      Int
+  id             String       @id @default(cuid())
+  weight         Float
+  reps           Int
+  sessionEntryId String
+  sessionEntry   SessionEntry @relation(fields: [sessionEntryId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
 
-  workoutId String
-  workout   Workout  @relation(fields: [workoutId], references: [id])
-
-  createdAt DateTime @default(now())
+  @@index([sessionEntryId])
 }
