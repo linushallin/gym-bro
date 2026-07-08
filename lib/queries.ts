@@ -218,11 +218,13 @@ export async function getSessionDetail(id: string) {
   if (!session) return null;
 
   const exerciseIds = session.entries.map((e) => e.exerciseId);
-  const previousByExercise = await latestLoggedEntriesByExercise(exerciseIds, session.createdAt);
-  const prByExercise = await personalBestByExercise(exerciseIds);
+  const [previousByExercise, prByExercise, catalog] = await Promise.all([
+    latestLoggedEntriesByExercise(exerciseIds, session.createdAt),
+    personalBestByExercise(exerciseIds),
+    getExerciseCatalog(session.workoutType),
+  ]);
 
   const addedExerciseIds = new Set(exerciseIds);
-  const catalog = await getExerciseCatalog(session.workoutType);
   const availableExercises = catalog.filter((ex) => !addedExerciseIds.has(ex.id));
   const previousByAvailableExercise = await latestLoggedEntriesByExercise(availableExercises.map((ex) => ex.id));
 

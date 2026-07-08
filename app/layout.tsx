@@ -16,6 +16,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Träningsdagbok",
   description: "Din personliga träningsdagbok — logga pass, följ trender och personbästa.",
+  appleWebApp: {
+    capable: true,
+    title: "Träning",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export const viewport: Viewport = {
