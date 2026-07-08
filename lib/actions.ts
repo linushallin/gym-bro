@@ -113,6 +113,18 @@ export async function finishSession(formData: FormData) {
   redirect(`/passtyp/${workoutType.toLowerCase()}`);
 }
 
+// Deletes a whole logged workout (and, via cascade, its entries and sets).
+export async function deleteSession(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const workoutType = String(formData.get("workoutType") ?? "");
+  if (!id) return;
+
+  await prisma.session.delete({ where: { id } });
+
+  revalidatePath("/", "layout");
+  redirect(`/passtyp/${workoutType.toLowerCase()}`);
+}
+
 export async function deleteSet(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;

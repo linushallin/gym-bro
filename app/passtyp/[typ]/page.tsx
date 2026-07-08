@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { getSessionHistory } from "@/lib/queries";
 import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_ICON, WORKOUT_TYPE_COLOR, isWorkoutType } from "@/lib/workout-types";
 import { formatDateTime, formatVolume, formatWeight } from "@/lib/format";
-import { startSession } from "@/lib/actions";
+import { startSession, deleteSession } from "@/lib/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export default async function WorkoutTypePage({
   params,
@@ -58,11 +59,9 @@ export default async function WorkoutTypePage({
       ) : (
         <div className="divide-y divide-border rounded-xl border border-border bg-surface">
           {sessions.map((s) => (
-            <Link
-              key={s.id}
-              href={`/pass/${s.id}`}
-              className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover"
-            >
+            <div key={s.id} className="relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover">
+              <Link href={`/pass/${s.id}`} className="absolute inset-0" aria-label={formatDateTime(s.createdAt)} />
+
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{formatDateTime(s.createdAt)}</p>
                 <p className="mt-0.5 truncate text-xs text-subtle">
@@ -79,8 +78,21 @@ export default async function WorkoutTypePage({
                   </p>
                 )}
               </div>
+
+              <form action={deleteSession} className="relative z-10 shrink-0">
+                <input type="hidden" name="id" value={s.id} />
+                <input type="hidden" name="workoutType" value={workoutType} />
+                <ConfirmSubmitButton
+                  confirmMessage="Ta bort det här passet? Alla loggade set försvinner permanent."
+                  ariaLabel="Ta bort pass"
+                  className="flex h-9 w-9 items-center justify-center rounded-md text-subtle transition-colors hover:bg-surface-hover hover:text-critical"
+                >
+                  <Trash2 size={15} />
+                </ConfirmSubmitButton>
+              </form>
+
               <ChevronRight size={14} className="shrink-0 text-subtle" />
-            </Link>
+            </div>
           ))}
         </div>
       )}

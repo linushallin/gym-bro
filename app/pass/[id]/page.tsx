@@ -4,8 +4,9 @@ import { Check, ChevronLeft, Plus, Trash2, X } from "lucide-react";
 import { getSessionDetail } from "@/lib/queries";
 import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_ICON, WORKOUT_TYPE_COLOR } from "@/lib/workout-types";
 import { formatWeight, relativeDays } from "@/lib/format";
-import { addSet, deleteSet, deleteEntry, addExerciseToSession, finishSession } from "@/lib/actions";
+import { addSet, deleteSet, deleteEntry, addExerciseToSession, finishSession, deleteSession } from "@/lib/actions";
 import { PrCard } from "@/components/pr-card";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 type SessionDetail = NonNullable<Awaited<ReturnType<typeof getSessionDetail>>>;
 type Entry = SessionDetail["entries"][number];
@@ -113,6 +114,18 @@ export default async function SessionPage({
           <Check size={16} />
           Klar med passet
         </button>
+      </form>
+
+      <form action={deleteSession} className="flex justify-center">
+        <input type="hidden" name="id" value={session.id} />
+        <input type="hidden" name="workoutType" value={session.workoutType} />
+        <ConfirmSubmitButton
+          confirmMessage="Ta bort hela passet? Alla loggade set försvinner permanent."
+          className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-subtle transition-colors hover:text-critical"
+        >
+          <Trash2 size={13} />
+          Ta bort passet
+        </ConfirmSubmitButton>
       </form>
     </div>
   );

@@ -17,6 +17,26 @@ function topSet(sets: { weight: number; reps: number }[]) {
 // A session only "counts" once it has at least one logged set.
 const LOGGED_SESSION_WHERE = { entries: { some: { sets: { some: {} } } } } as const;
 
+function dayKey(d: Date): number {
+  return Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// Monday of the calendar week containing `d`.
+function mondayOfWeek(d: Date): number {
+  const key = dayKey(d);
+  const weekday = new Date(key).getUTCDay() || 7; // Mon=1..Sun=7
+  return key - (weekday - 1) * DAY_MS;
+}
+
+// ISO 8601 week number (matches the Swedish "v. 28" convention).
+function isoWeekNumber(d: Date): number {
+  const key = dayKey(d);
+  const weekday = new Date(key).getUTCDay() || 7;
+  const thursday = key + (4 - weekday) * DAY_MS; // nearest Thursday
+  const yearStart = Date.UTC(new Date(thursday).getUTCFullYear(), 0, 1);
+  return Math.ceil(((thursday - yearStart) / DAY_MS + 1) / 7);
+}
+
 type SessionWithEntries = {
   id: string;
   workoutType: WorkoutType;
@@ -49,6 +69,11 @@ export type WorkoutTypeSummary = {
   exerciseCount: number;
 };
 
+export type DayActivity = {
+  date: Date;
+  workoutTypes: WorkoutType[];
+};
+
 export type DashboardData = {
   types: WorkoutTypeSummary[];
   streakDays: number;
@@ -57,7 +82,8 @@ export type DashboardData = {
   volumeThisWeek: number;
   volumeLastWeek: number;
   setsThisWeek: number;
-  recent: ReturnType<typeof summarizeSession>[];
+  weekNumber: number;
+  weekActivity: DayActivity[];
 };
 
 export async function getDashboardData(): Promise<DashboardData> {
@@ -110,6 +136,21 @@ export async function getDashboardData(): Promise<DashboardData> {
   const sessionsThisWeek = recentSummaries.filter((s) => s.createdAt >= weekStart);
   const sessionsLastWeek = recentSummaries.filter((s) => s.createdAt < weekStart);
 
+  // Current calendar week, Monday through Sunday.
+  const mondayKey = mondayOfWeek(now);
+  const trainedByDay = new Map<number, WorkoutType[]>();
+  for (const s of recentSummaries) {
+    const key = dayKey(s.createdAt);
+    if (key < mondayKey || key >= mondayKey + 7 * DAY_MS) continue;
+    const types = trainedByDay.get(key) ?? [];
+    if (!types.includes(s.workoutType)) types.push(s.workoutType);
+    trainedByDay.set(key, types);
+  }
+  const weekActivity: DayActivity[] = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(mondayKey + i * DAY_MS);
+    return { date, workoutTypes: trainedByDay.get(date.getTime()) ?? [] };
+  });
+
   return {
     types,
     streakDays: computeStreak(streakDates.map((d) => d.createdAt)),
@@ -118,13 +159,13 @@ export async function getDashboardData(): Promise<DashboardData> {
     volumeThisWeek: sessionsThisWeek.reduce((sum, s) => sum + s.volume, 0),
     volumeLastWeek: sessionsLastWeek.reduce((sum, s) => sum + s.volume, 0),
     setsThisWeek: sessionsThisWeek.reduce((sum, s) => sum + s.setCount, 0),
-    recent: recentSummaries.slice(0, 8),
+    weekNumber: isoWeekNumber(now),
+    weekActivity,
   };
 }
 
 function computeStreak(dates: Date[]): number {
   if (dates.length === 0) return 0;
-  const dayKey = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
   const uniqueDays = Array.from(new Set(dates.map(dayKey))).sort((a, b) => b - a);
 
   const todayKey = dayKey(new Date());

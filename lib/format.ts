@@ -5,9 +5,15 @@ const dateTimeFmt = new Intl.DateTimeFormat("sv-SE", {
   hour: "2-digit",
   minute: "2-digit",
 });
+const weekdayFmt = new Intl.DateTimeFormat("sv-SE", { weekday: "short" });
 
 export function formatDate(date: Date): string {
   return dateFmt.format(date);
+}
+
+export function formatWeekday(date: Date): string {
+  const label = weekdayFmt.format(date).replace(/\.$/, "");
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 export function formatDateTime(date: Date): string {
