@@ -4,7 +4,8 @@ import { Check, ChevronLeft, Plus, Trash2, X } from "lucide-react";
 import { getSessionDetail } from "@/lib/queries";
 import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_ICON, WORKOUT_TYPE_COLOR } from "@/lib/workout-types";
 import { formatWeight, relativeDays } from "@/lib/format";
-import { addSet, deleteSet, deleteEntry, addExerciseToSession } from "@/lib/actions";
+import { addSet, deleteSet, deleteEntry, addExerciseToSession, finishSession } from "@/lib/actions";
+import { PrCard } from "@/components/pr-card";
 
 type SessionDetail = NonNullable<Awaited<ReturnType<typeof getSessionDetail>>>;
 type Entry = SessionDetail["entries"][number];
@@ -60,16 +61,23 @@ export default async function SessionPage({
         <p className="mb-3 text-sm font-medium">Lägg till övning</p>
 
         {session.availableExercises.length > 0 && (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="mb-3 space-y-1.5">
             {session.availableExercises.map((ex) => (
               <form key={ex.id} action={addExerciseToSession}>
                 <input type="hidden" name="sessionId" value={session.id} />
                 <input type="hidden" name="exerciseId" value={ex.id} />
                 <button
                   type="submit"
-                  className="flex h-9 items-center rounded-full border border-border px-3.5 text-sm transition-colors hover:border-accent hover:text-accent"
+                  className="flex w-full items-center justify-between rounded-lg border border-border px-3.5 py-2.5 text-left text-sm transition-colors hover:border-accent hover:text-accent"
                 >
-                  {ex.name}
+                  <span className="font-medium">{ex.name}</span>
+                  {ex.previous ? (
+                    <span className="font-mono text-xs text-subtle">
+                      {ex.previous.sets.map((s) => `${formatWeight(s.weight)}×${s.reps}`).join(", ")}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-subtle">Ny övning</span>
+                  )}
                 </button>
               </form>
             ))}
@@ -95,13 +103,17 @@ export default async function SessionPage({
         </form>
       </div>
 
-      <Link
-        href={`/passtyp/${session.workoutType.toLowerCase()}`}
-        className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover"
-      >
-        <Check size={16} />
-        Klar med passet
-      </Link>
+      <form action={finishSession}>
+        <input type="hidden" name="id" value={session.id} />
+        <input type="hidden" name="workoutType" value={session.workoutType} />
+        <button
+          type="submit"
+          className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover"
+        >
+          <Check size={16} />
+          Klar med passet
+        </button>
+      </form>
     </div>
   );
 }
@@ -129,6 +141,8 @@ function EntryCard({ entry }: { entry: Entry }) {
           </form>
         )}
       </div>
+
+      {entry.pr && <PrCard pr={entry.pr} />}
 
       {entry.previous && (
         <div className="border-b border-border px-4 py-2 text-xs text-muted">

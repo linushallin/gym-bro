@@ -33,7 +33,7 @@ async function resolveExercise(formData: FormData, workoutType: WorkoutType): Pr
 async function findOrCreateSession(workoutType: WorkoutType) {
   const resumeAfter = new Date(Date.now() - SESSION_RESUME_WINDOW_MS);
   const existing = await prisma.session.findFirst({
-    where: { workoutType, createdAt: { gte: resumeAfter } },
+    where: { workoutType, createdAt: { gte: resumeAfter }, finishedAt: null },
     orderBy: { createdAt: "desc" },
   });
   if (existing) return existing;
@@ -98,6 +98,19 @@ export async function addSet(formData: FormData) {
   });
 
   revalidatePath("/", "layout");
+}
+
+// Explicitly close a session so a later session of the same workout type
+// starts fresh instead of being merged into this one by the resume window.
+export async function finishSession(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  const workoutType = String(formData.get("workoutType") ?? "");
+  if (!id) throw new Error("Passet hittades inte");
+
+  await prisma.session.update({ where: { id }, data: { finishedAt: new Date() } });
+
+  revalidatePath("/", "layout");
+  redirect(`/passtyp/${workoutType.toLowerCase()}`);
 }
 
 export async function deleteSet(formData: FormData) {

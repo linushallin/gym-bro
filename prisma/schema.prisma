@@ -36,6 +36,7 @@ model Session {
   workoutType WorkoutType
   notes       String?
   createdAt   DateTime       @default(now())
+  finishedAt  DateTime?
   entries     SessionEntry[]
 
   @@index([workoutType, createdAt])

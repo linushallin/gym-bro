@@ -163,6 +163,48 @@ export async function getExerciseCatalog(workoutType: WorkoutType) {
   });
 }
 
+async function latestLoggedEntriesByExercise(exerciseIds: string[], before?: Date) {
+  const byExercise = new Map<string, { createdAt: Date; sets: { weight: number; reps: number }[] }>();
+  if (exerciseIds.length === 0) return byExercise;
+
+  const entries = await prisma.sessionEntry.findMany({
+    where: {
+      exerciseId: { in: exerciseIds },
+      sets: { some: {} },
+      ...(before ? { createdAt: { lt: before } } : {}),
+    },
+    include: { sets: { orderBy: { createdAt: "asc" } } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  for (const entry of entries) {
+    if (!byExercise.has(entry.exerciseId)) {
+      byExercise.set(entry.exerciseId, { createdAt: entry.createdAt, sets: entry.sets });
+    }
+  }
+  return byExercise;
+}
+
+async function personalBestByExercise(exerciseIds: string[]) {
+  const bestByExercise = new Map<string, { weight: number; reps: number; date: Date }>();
+  if (exerciseIds.length === 0) return bestByExercise;
+
+  const entries = await prisma.sessionEntry.findMany({
+    where: { exerciseId: { in: exerciseIds }, sets: { some: {} } },
+    select: { exerciseId: true, createdAt: true, sets: { select: { weight: true, reps: true } } },
+  });
+
+  for (const entry of entries) {
+    const best = topSet(entry.sets);
+    if (!best) continue;
+    const current = bestByExercise.get(entry.exerciseId);
+    if (!current || best.weight > current.weight) {
+      bestByExercise.set(entry.exerciseId, { weight: best.weight, reps: best.reps, date: entry.createdAt });
+    }
+  }
+  return bestByExercise;
+}
+
 export async function getSessionDetail(id: string) {
   const session = await prisma.session.findUnique({
     where: { id },
@@ -176,28 +218,13 @@ export async function getSessionDetail(id: string) {
   if (!session) return null;
 
   const exerciseIds = session.entries.map((e) => e.exerciseId);
-  const priorEntries = exerciseIds.length
-    ? await prisma.sessionEntry.findMany({
-        where: {
-          exerciseId: { in: exerciseIds },
-          createdAt: { lt: session.createdAt },
-          sets: { some: {} },
-        },
-        include: { sets: { orderBy: { createdAt: "asc" } } },
-        orderBy: { createdAt: "desc" },
-      })
-    : [];
-
-  const previousByExercise = new Map<string, { createdAt: Date; sets: { weight: number; reps: number }[] }>();
-  for (const entry of priorEntries) {
-    if (!previousByExercise.has(entry.exerciseId)) {
-      previousByExercise.set(entry.exerciseId, { createdAt: entry.createdAt, sets: entry.sets });
-    }
-  }
+  const previousByExercise = await latestLoggedEntriesByExercise(exerciseIds, session.createdAt);
+  const prByExercise = await personalBestByExercise(exerciseIds);
 
   const addedExerciseIds = new Set(exerciseIds);
   const catalog = await getExerciseCatalog(session.workoutType);
   const availableExercises = catalog.filter((ex) => !addedExerciseIds.has(ex.id));
+  const previousByAvailableExercise = await latestLoggedEntriesByExercise(availableExercises.map((ex) => ex.id));
 
   return {
     id: session.id,
@@ -209,8 +236,12 @@ export async function getSessionDetail(id: string) {
       exerciseName: e.exercise.name,
       sets: e.sets,
       previous: previousByExercise.get(e.exerciseId) ?? null,
+      pr: prByExercise.get(e.exerciseId) ?? null,
     })),
-    availableExercises,
+    availableExercises: availableExercises.map((ex) => ({
+      ...ex,
+      previous: previousByAvailableExercise.get(ex.id) ?? null,
+    })),
   };
 }
 
