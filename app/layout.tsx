@@ -25,6 +25,11 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+// Every page reads live data straight from the DB and changes on every log
+// action — never prerender statically (that would need DB access at build
+// time and would bake in stale data).
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({
   children,
 }: Readonly<{
