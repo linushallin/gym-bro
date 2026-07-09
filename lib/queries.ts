@@ -1,9 +1,38 @@
 import { prisma } from "@/lib/prisma";
 import type { WorkoutType } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { WORKOUT_TYPES } from "@/lib/workout-types";
 import { estimate1RM } from "@/lib/format";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
+
+// All reads are cached indefinitely and only invalidated by revalidateTag("gym-data"),
+// called from every mutating action in lib/actions.ts. Single-user app, so one broad
+// tag covering all queries is simpler than granular tags and matches how the actions
+// already treat every write as invalidating everything.
+export const GYM_DATA_TAG = "gym-data";
+
+// unstable_cache serializes results to JSON to persist them, so on a cache hit it
+// hands back plain ISO strings instead of the original Date objects (a cache miss
+// returns the real Dates untouched, which is why this only shows up intermittently).
+// Revive them so callers can keep treating every createdAt/date field as a Date.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+function reviveDates<T>(value: T): T {
+  if (typeof value === "string") {
+    return (ISO_DATE_RE.test(value) ? new Date(value) : value) as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map(reviveDates) as T;
+  }
+  if (value instanceof Date) {
+    return value;
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, reviveDates(v)])) as T;
+  }
+  return value;
+}
 
 function setVolume(sets: { weight: number; reps: number }[]): number {
   return sets.reduce((sum, s) => sum + s.weight * s.reps, 0);
@@ -86,7 +115,19 @@ export type DashboardData = {
   weekActivity: DayActivity[];
 };
 
+const cachedGetDashboardData = unstable_cache(
+  _getDashboardData,
+  ["dashboard"],
+  // revalidate on a timer too, not just on write: streak/week-activity depend on
+  // the current date, which moves even when nobody logs a new set.
+  { tags: [GYM_DATA_TAG], revalidate: 300 },
+);
+
 export async function getDashboardData(): Promise<DashboardData> {
+  return reviveDates(await cachedGetDashboardData());
+}
+
+async function _getDashboardData(): Promise<DashboardData> {
   const now = new Date();
   const twoWeeksAgo = new Date(now.getTime() - 14 * DAY_MS);
   const weekStart = new Date(now.getTime() - 7 * DAY_MS);
@@ -187,43 +228,50 @@ function computeStreak(dates: Date[]): number {
   return streak;
 }
 
+const cachedGetSessionHistory = unstable_cache(
+  async (workoutType: WorkoutType) => {
+    const sessions = await prisma.session.findMany({
+      where: { workoutType, ...LOGGED_SESSION_WHERE },
+      include: { entries: { include: { exercise: true, sets: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    return sessions.map(summarizeSession);
+  },
+  ["session-history"],
+  { tags: [GYM_DATA_TAG] },
+);
+
 export async function getSessionHistory(workoutType: WorkoutType) {
-  const sessions = await prisma.session.findMany({
-    where: { workoutType, ...LOGGED_SESSION_WHERE },
-    include: { entries: { include: { exercise: true, sets: true } } },
-    orderBy: { createdAt: "desc" },
-  });
-  return sessions.map(summarizeSession);
+  return reviveDates(await cachedGetSessionHistory(workoutType));
 }
+
+const cachedGetExerciseCatalog = unstable_cache(
+  async (workoutType: WorkoutType) => {
+    return prisma.exercise.findMany({
+      where: { workoutType },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  },
+  ["exercise-catalog"],
+  { tags: [GYM_DATA_TAG] },
+);
 
 export async function getExerciseCatalog(workoutType: WorkoutType) {
-  return prisma.exercise.findMany({
-    where: { workoutType },
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  return reviveDates(await cachedGetExerciseCatalog(workoutType));
 }
 
-async function latestLoggedEntriesByExercise(exerciseIds: string[], before?: Date) {
-  const byExercise = new Map<string, { createdAt: Date; sets: { weight: number; reps: number }[] }>();
-  if (exerciseIds.length === 0) return byExercise;
-
-  const entries = await prisma.sessionEntry.findMany({
-    where: {
-      exerciseId: { in: exerciseIds },
-      sets: { some: {} },
-      ...(before ? { createdAt: { lt: before } } : {}),
-    },
+// Every logged entry for a workout type, newest first — covers both exercises already
+// in the session (need the latest one *before* it started) and exercises still
+// available to add (need the latest one overall). One query instead of two lets it run
+// in the same Promise.all as the catalog/PR lookups, instead of waiting on the catalog
+// result first to know which exercise ids to ask about.
+async function latestLoggedEntriesByWorkoutType(workoutType: WorkoutType) {
+  return prisma.sessionEntry.findMany({
+    where: { exercise: { workoutType }, sets: { some: {} } },
     include: { sets: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
-
-  for (const entry of entries) {
-    if (!byExercise.has(entry.exerciseId)) {
-      byExercise.set(entry.exerciseId, { createdAt: entry.createdAt, sets: entry.sets });
-    }
-  }
-  return byExercise;
 }
 
 async function personalBestByExercise(exerciseIds: string[]) {
@@ -246,7 +294,13 @@ async function personalBestByExercise(exerciseIds: string[]) {
   return bestByExercise;
 }
 
+const cachedGetSessionDetail = unstable_cache(_getSessionDetail, ["session-detail"], { tags: [GYM_DATA_TAG] });
+
 export async function getSessionDetail(id: string) {
+  return reviveDates(await cachedGetSessionDetail(id));
+}
+
+async function _getSessionDetail(id: string) {
   const session = await prisma.session.findUnique({
     where: { id },
     include: {
@@ -259,15 +313,28 @@ export async function getSessionDetail(id: string) {
   if (!session) return null;
 
   const exerciseIds = session.entries.map((e) => e.exerciseId);
-  const [previousByExercise, prByExercise, catalog] = await Promise.all([
-    latestLoggedEntriesByExercise(exerciseIds, session.createdAt),
+  const [workoutTypeEntries, prByExercise, catalog] = await Promise.all([
+    latestLoggedEntriesByWorkoutType(session.workoutType),
     personalBestByExercise(exerciseIds),
     getExerciseCatalog(session.workoutType),
   ]);
 
+  // workoutTypeEntries is sorted newest-first, so the first entry seen per exercise id
+  // is its latest — for "available" exercises that's the latest overall, for exercises
+  // already in this session it's the latest one strictly before it started.
+  const previousByExercise = new Map<string, { createdAt: Date; sets: { weight: number; reps: number }[] }>();
+  const previousByAvailableExercise = new Map<string, { createdAt: Date; sets: { weight: number; reps: number }[] }>();
+  for (const entry of workoutTypeEntries) {
+    if (!previousByAvailableExercise.has(entry.exerciseId)) {
+      previousByAvailableExercise.set(entry.exerciseId, { createdAt: entry.createdAt, sets: entry.sets });
+    }
+    if (entry.createdAt < session.createdAt && !previousByExercise.has(entry.exerciseId)) {
+      previousByExercise.set(entry.exerciseId, { createdAt: entry.createdAt, sets: entry.sets });
+    }
+  }
+
   const addedExerciseIds = new Set(exerciseIds);
   const availableExercises = catalog.filter((ex) => !addedExerciseIds.has(ex.id));
-  const previousByAvailableExercise = await latestLoggedEntriesByExercise(availableExercises.map((ex) => ex.id));
 
   return {
     id: session.id,
@@ -288,7 +355,15 @@ export async function getSessionDetail(id: string) {
   };
 }
 
+const cachedGetExerciseQuickInfo = unstable_cache(_getExerciseQuickInfo, ["exercise-quick-info"], {
+  tags: [GYM_DATA_TAG],
+});
+
 export async function getExerciseQuickInfo(id: string) {
+  return reviveDates(await cachedGetExerciseQuickInfo(id));
+}
+
+async function _getExerciseQuickInfo(id: string) {
   const exercise = await prisma.exercise.findUnique({
     where: { id },
     include: {
@@ -311,7 +386,13 @@ export async function getExerciseQuickInfo(id: string) {
   };
 }
 
+const cachedGetExerciseDetail = unstable_cache(_getExerciseDetail, ["exercise-detail"], { tags: [GYM_DATA_TAG] });
+
 export async function getExerciseDetail(id: string) {
+  return reviveDates(await cachedGetExerciseDetail(id));
+}
+
+async function _getExerciseDetail(id: string) {
   const exercise = await prisma.exercise.findUnique({
     where: { id },
     include: {
@@ -372,7 +453,18 @@ export type WeeklyBucket = {
   sets: number;
 };
 
+const cachedGetTrendsData = unstable_cache(
+  _getTrendsData,
+  ["trends"],
+  // same reasoning as getDashboardData: week bucket boundaries are relative to "now".
+  { tags: [GYM_DATA_TAG], revalidate: 300 },
+);
+
 export async function getTrendsData(weeks = 12) {
+  return reviveDates(await cachedGetTrendsData(weeks));
+}
+
+async function _getTrendsData(weeks = 12) {
   const now = new Date();
   const rangeStart = new Date(now.getTime() - weeks * 7 * DAY_MS);
 

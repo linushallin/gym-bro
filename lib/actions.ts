@@ -3,8 +3,9 @@
 import { prisma } from "@/lib/prisma";
 import { isWorkoutType } from "@/lib/workout-types";
 import type { WorkoutType } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { updateTag } from "next/cache";
 import { redirect } from "next/navigation";
+import { GYM_DATA_TAG } from "@/lib/queries";
 
 const SESSION_RESUME_WINDOW_MS = 6 * 60 * 60 * 1000; // reuse a session started within the last 6h
 
@@ -54,7 +55,7 @@ export async function startSession(formData: FormData) {
   if (!isWorkoutType(workoutType)) throw new Error("Ogiltigt pass");
 
   const session = await findOrCreateSession(workoutType);
-  revalidatePath("/", "layout");
+  updateTag(GYM_DATA_TAG);
   redirect(`/pass/${session.id}`);
 }
 
@@ -68,7 +69,7 @@ export async function startSessionForExercise(formData: FormData) {
   const session = await findOrCreateSession(exercise.workoutType);
   await findOrCreateEntry(session.id, exercise.id);
 
-  revalidatePath("/", "layout");
+  updateTag(GYM_DATA_TAG);
   redirect(`/pass/${session.id}`);
 }
 
@@ -81,7 +82,7 @@ export async function addExerciseToSession(formData: FormData) {
   const exerciseId = await resolveExercise(formData, session.workoutType);
   await findOrCreateEntry(sessionId, exerciseId);
 
-  revalidatePath("/", "layout");
+  updateTag(GYM_DATA_TAG);
 }
 
 export async function addSet(formData: FormData) {
@@ -97,7 +98,7 @@ export async function addSet(formData: FormData) {
     data: { sessionEntryId, weight, reps: Math.round(reps) },
   });
 
-  revalidatePath("/", "layout");
+  updateTag(GYM_DATA_TAG);
 }
 
 // Explicitly close a session so a later session of the same workout type
@@ -109,7 +110,7 @@ export async function finishSession(formData: FormData) {
 
   await prisma.session.update({ where: { id }, data: { finishedAt: new Date() } });
 
-  revalidatePath("/", "layout");
+  updateTag(GYM_DATA_TAG);
   redirect(`/passtyp/${workoutType.toLowerCase()}`);
 }
 
@@ -121,7 +122,7 @@ export async function deleteSession(formData: FormData) {
 
   await prisma.session.delete({ where: { id } });
 
-  revalidatePath("/", "layout");
+  updateTag(GYM_DATA_TAG);
   redirect(`/passtyp/${workoutType.toLowerCase()}`);
 }
 
@@ -129,7 +130,7 @@ export async function deleteSet(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.workoutSet.delete({ where: { id } });
-  revalidatePath("/", "layout");
+  updateTag(GYM_DATA_TAG);
 }
 
 // Only removes an entry that has no sets yet — safety net against accidental deletes.
@@ -137,5 +138,5 @@ export async function deleteEntry(formData: FormData) {
   const id = String(formData.get("id") ?? "");
   if (!id) return;
   await prisma.sessionEntry.deleteMany({ where: { id, sets: { none: {} } } });
-  revalidatePath("/", "layout");
+  updateTag(GYM_DATA_TAG);
 }
