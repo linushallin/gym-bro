@@ -3,7 +3,6 @@ import { Plus, ChevronRight } from "lucide-react";
 import type { WorkoutTypeSummary } from "@/lib/queries";
 import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_ICON, WORKOUT_TYPE_COLOR } from "@/lib/workout-types";
 import { relativeDays, formatWeight } from "@/lib/format";
-import { Delta } from "@/components/delta";
 import { startSession } from "@/lib/actions";
 
 export function WorkoutTypeCard({ summary }: { summary: WorkoutTypeSummary }) {
@@ -63,12 +62,6 @@ export function WorkoutTypeCard({ summary }: { summary: WorkoutTypeSummary }) {
           <p className="text-sm text-subtle">Inget loggat än</p>
         )}
       </div>
-
-      {(summary.volumeThisWeek > 0 || summary.volumeLastWeek > 0) && (
-        <div className="mt-2">
-          <Delta current={summary.volumeThisWeek} previous={summary.volumeLastWeek} />
-        </div>
-      )}
     </div>
   );
 }

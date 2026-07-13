@@ -66,3 +66,11 @@ model WorkoutSet {
 
   @@index([sessionEntryId])
 }
+
+model BodyWeight {
+  id        String   @id @default(cuid())
+  weight    Float
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

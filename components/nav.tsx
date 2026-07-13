@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Dumbbell, LayoutGrid, LineChart, Plus } from "lucide-react";
+import { Dumbbell, LayoutGrid, LineChart, Plus, Scale } from "lucide-react";
 
 const LINKS = [
   { href: "/", label: "Översikt", icon: LayoutGrid },
   { href: "/trender", label: "Trender", icon: LineChart },
+  { href: "/vikt", label: "Vikt", icon: Scale },
 ];
 
 export function Nav() {

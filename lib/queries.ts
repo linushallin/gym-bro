@@ -130,7 +130,11 @@ export async function getDashboardData(): Promise<DashboardData> {
 async function _getDashboardData(): Promise<DashboardData> {
   const now = new Date();
   const twoWeeksAgo = new Date(now.getTime() - 14 * DAY_MS);
-  const weekStart = new Date(now.getTime() - 7 * DAY_MS);
+  // Calendar week (Monday-Sunday), matching weekActivity/weekNumber below —
+  // not a rolling 7-day window, which would still show mostly last week's
+  // data on a Monday.
+  const weekStart = new Date(mondayOfWeek(now));
+  const lastWeekStart = new Date(mondayOfWeek(now) - 7 * DAY_MS);
 
   const [latestPerType, exerciseCounts, recentSessions, streakDates] = await Promise.all([
     Promise.all(
@@ -162,7 +166,9 @@ async function _getDashboardData(): Promise<DashboardData> {
   const types: WorkoutTypeSummary[] = WORKOUT_TYPES.map((wt, i) => {
     const last = latestPerType[i];
     const typeSessionsThisWeek = recentSummaries.filter((s) => s.workoutType === wt && s.createdAt >= weekStart);
-    const typeSessionsLastWeek = recentSummaries.filter((s) => s.workoutType === wt && s.createdAt < weekStart);
+    const typeSessionsLastWeek = recentSummaries.filter(
+      (s) => s.workoutType === wt && s.createdAt >= lastWeekStart && s.createdAt < weekStart,
+    );
 
     return {
       workoutType: wt,
@@ -175,10 +181,10 @@ async function _getDashboardData(): Promise<DashboardData> {
   });
 
   const sessionsThisWeek = recentSummaries.filter((s) => s.createdAt >= weekStart);
-  const sessionsLastWeek = recentSummaries.filter((s) => s.createdAt < weekStart);
+  const sessionsLastWeek = recentSummaries.filter((s) => s.createdAt >= lastWeekStart && s.createdAt < weekStart);
 
   // Current calendar week, Monday through Sunday.
-  const mondayKey = mondayOfWeek(now);
+  const mondayKey = weekStart.getTime();
   const trainedByDay = new Map<number, WorkoutType[]>();
   for (const s of recentSummaries) {
     const key = dayKey(s.createdAt);
@@ -519,4 +525,43 @@ async function _getTrendsData(weeks = 12) {
     .sort((a, b) => b.est1RM - a.est1RM);
 
   return { buckets, balance, records };
+}
+
+export type WeightEntry = {
+  id: string;
+  weight: number;
+  createdAt: Date;
+};
+
+export type WeightData = {
+  entries: WeightEntry[]; // newest first
+  latest: number | null;
+  weekChange: number | null; // change vs the last entry at least 7 days before the latest one
+};
+
+const cachedGetWeightData = unstable_cache(_getWeightData, ["weight"], { tags: [GYM_DATA_TAG] });
+
+export async function getWeightData(): Promise<WeightData> {
+  return reviveDates(await cachedGetWeightData());
+}
+
+async function _getWeightData(): Promise<WeightData> {
+  const entries = await prisma.bodyWeight.findMany({ orderBy: { createdAt: "desc" } });
+  if (entries.length === 0) return { entries, latest: null, weekChange: null };
+
+  const latest = entries[0].weight;
+  const weekAgoCutoff = new Date(entries[0].createdAt.getTime() - 7 * DAY_MS);
+  // entries is newest-first, so the first one at or before the cutoff is the
+  // most recent qualifying entry. Falls back to the oldest entry when the
+  // whole history is younger than 7 days.
+  let reference = entries[entries.length - 1];
+  for (const e of entries) {
+    if (e.createdAt <= weekAgoCutoff) {
+      reference = e;
+      break;
+    }
+  }
+  const weekChange = entries.length > 1 ? latest - reference.weight : null;
+
+  return { entries, latest, weekChange };
 }

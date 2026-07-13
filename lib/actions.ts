@@ -140,3 +140,18 @@ export async function deleteEntry(formData: FormData) {
   await prisma.sessionEntry.deleteMany({ where: { id, sets: { none: {} } } });
   updateTag(GYM_DATA_TAG);
 }
+
+export async function logWeight(formData: FormData) {
+  const weight = parseNumber(formData.get("weight"));
+  if (Number.isNaN(weight) || weight <= 0) throw new Error("Ogiltig vikt");
+
+  await prisma.bodyWeight.create({ data: { weight } });
+  updateTag(GYM_DATA_TAG);
+}
+
+export async function deleteWeightEntry(formData: FormData) {
+  const id = String(formData.get("id") ?? "");
+  if (!id) return;
+  await prisma.bodyWeight.delete({ where: { id } });
+  updateTag(GYM_DATA_TAG);
+}
