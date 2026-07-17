@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Plus, Trophy } from "lucide-react";
 import { getExerciseDetail } from "@/lib/queries";
-import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_ICON, WORKOUT_TYPE_COLOR } from "@/lib/workout-types";
+import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_ICON, MUSCLE_GROUP_COLOR } from "@/lib/muscle-groups";
 import { formatDateTime, formatWeight, formatVolume } from "@/lib/format";
 import { ExerciseChart } from "@/components/exercise-chart";
 import { startSessionForExercise } from "@/lib/actions";
@@ -16,14 +16,14 @@ export default async function ExercisePage({
   const exercise = await getExerciseDetail(id);
   if (!exercise) notFound();
 
-  const label = WORKOUT_TYPE_LABEL[exercise.workoutType];
-  const Icon = WORKOUT_TYPE_ICON[exercise.workoutType];
-  const color = WORKOUT_TYPE_COLOR[exercise.workoutType];
+  const label = MUSCLE_GROUP_LABEL[exercise.muscleGroup];
+  const Icon = MUSCLE_GROUP_ICON[exercise.muscleGroup];
+  const color = MUSCLE_GROUP_COLOR[exercise.muscleGroup];
 
   return (
     <div className="space-y-6">
       <Link
-        href={`/passtyp/${exercise.workoutType.toLowerCase()}`}
+        href={`/muskel/${exercise.muscleGroup.toLowerCase()}`}
         className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
       >
         <ChevronLeft size={15} /> {label}

@@ -2,24 +2,30 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { getSessionHistory } from "@/lib/queries";
-import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_ICON, WORKOUT_TYPE_COLOR, isWorkoutType } from "@/lib/workout-types";
+import {
+  MUSCLE_GROUP_LABEL,
+  MUSCLE_GROUP_ICON,
+  MUSCLE_GROUP_COLOR,
+  isMuscleGroup,
+  sessionLabel,
+} from "@/lib/muscle-groups";
 import { formatDateTime, formatVolume, formatWeight } from "@/lib/format";
 import { startSession, deleteSession } from "@/lib/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
-export default async function WorkoutTypePage({
+export default async function MuscleGroupPage({
   params,
 }: {
-  params: Promise<{ typ: string }>;
+  params: Promise<{ grupp: string }>;
 }) {
-  const { typ } = await params;
-  const workoutType = typ.toUpperCase();
-  if (!isWorkoutType(workoutType)) notFound();
+  const { grupp } = await params;
+  const group = grupp.toUpperCase();
+  if (!isMuscleGroup(group)) notFound();
 
-  const sessions = await getSessionHistory(workoutType);
-  const label = WORKOUT_TYPE_LABEL[workoutType];
-  const Icon = WORKOUT_TYPE_ICON[workoutType];
-  const color = WORKOUT_TYPE_COLOR[workoutType];
+  const sessions = await getSessionHistory(group);
+  const label = MUSCLE_GROUP_LABEL[group];
+  const Icon = MUSCLE_GROUP_ICON[group];
+  const color = MUSCLE_GROUP_COLOR[group];
 
   return (
     <div className="space-y-6">
@@ -41,7 +47,7 @@ export default async function WorkoutTypePage({
           </div>
         </div>
         <form action={startSession}>
-          <input type="hidden" name="workoutType" value={workoutType} />
+          <input type="hidden" name="muscleGroups" value={group} />
           <button
             type="submit"
             className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover sm:w-auto"
@@ -64,9 +70,8 @@ export default async function WorkoutTypePage({
 
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium">{formatDateTime(s.createdAt)}</p>
-                <p className="mt-0.5 truncate text-xs text-subtle">
-                  {s.exerciseNames.join(", ")}
-                </p>
+                <p className="text-xs text-muted">{sessionLabel(s.muscleGroups)}</p>
+                <p className="mt-0.5 truncate text-xs text-subtle">{s.exerciseNames.join(", ")}</p>
               </div>
               <div className="shrink-0 text-right text-xs text-muted">
                 <p>
@@ -81,7 +86,6 @@ export default async function WorkoutTypePage({
 
               <form action={deleteSession} className="relative z-10 shrink-0">
                 <input type="hidden" name="id" value={s.id} />
-                <input type="hidden" name="workoutType" value={workoutType} />
                 <ConfirmSubmitButton
                   confirmMessage="Ta bort det här passet? Alla loggade set försvinner permanent."
                   ariaLabel="Ta bort pass"

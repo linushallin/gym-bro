@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
-import type { WorkoutType } from "@prisma/client";
+import type { MuscleGroup } from "@prisma/client";
 import { unstable_cache } from "next/cache";
-import { WORKOUT_TYPES } from "@/lib/workout-types";
+import { MUSCLE_GROUPS } from "@/lib/muscle-groups";
 import { estimate1RM } from "@/lib/format";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
@@ -68,7 +68,7 @@ function isoWeekNumber(d: Date): number {
 
 type SessionWithEntries = {
   id: string;
-  workoutType: WorkoutType;
+  muscleGroups: MuscleGroup[];
   createdAt: Date;
   entries: {
     exercise: { id: string; name: string };
@@ -81,7 +81,7 @@ function summarizeSession(session: SessionWithEntries) {
   return {
     id: session.id,
     createdAt: session.createdAt,
-    workoutType: session.workoutType,
+    muscleGroups: session.muscleGroups,
     exerciseNames: session.entries.map((e) => e.exercise.name),
     setCount: sets.length,
     volume: setVolume(sets),
@@ -89,22 +89,12 @@ function summarizeSession(session: SessionWithEntries) {
   };
 }
 
-export type WorkoutTypeSummary = {
-  workoutType: WorkoutType;
-  lastSession: ReturnType<typeof summarizeSession> | null;
-  workoutsThisWeek: number;
-  volumeThisWeek: number;
-  volumeLastWeek: number;
-  exerciseCount: number;
-};
-
 export type DayActivity = {
   date: Date;
-  workoutTypes: WorkoutType[];
+  muscleGroups: MuscleGroup[];
 };
 
 export type DashboardData = {
-  types: WorkoutTypeSummary[];
   streakDays: number;
   workoutsThisWeek: number;
   workoutsLastWeek: number;
@@ -136,17 +126,7 @@ async function _getDashboardData(): Promise<DashboardData> {
   const weekStart = new Date(mondayOfWeek(now));
   const lastWeekStart = new Date(mondayOfWeek(now) - 7 * DAY_MS);
 
-  const [latestPerType, exerciseCounts, recentSessions, streakDates] = await Promise.all([
-    Promise.all(
-      WORKOUT_TYPES.map((wt) =>
-        prisma.session.findFirst({
-          where: { workoutType: wt, ...LOGGED_SESSION_WHERE },
-          orderBy: { createdAt: "desc" },
-          include: { entries: { include: { exercise: true, sets: true } } },
-        }),
-      ),
-    ),
-    prisma.exercise.groupBy({ by: ["workoutType"], _count: { _all: true } }),
+  const [recentSessions, streakDates] = await Promise.all([
     prisma.session.findMany({
       where: { createdAt: { gte: twoWeeksAgo }, ...LOGGED_SESSION_WHERE },
       include: { entries: { include: { exercise: true, sets: true } } },
@@ -160,46 +140,29 @@ async function _getDashboardData(): Promise<DashboardData> {
     }),
   ]);
 
-  const exerciseCountByType = new Map(exerciseCounts.map((c) => [c.workoutType, c._count._all]));
   const recentSummaries = recentSessions.map(summarizeSession);
-
-  const types: WorkoutTypeSummary[] = WORKOUT_TYPES.map((wt, i) => {
-    const last = latestPerType[i];
-    const typeSessionsThisWeek = recentSummaries.filter((s) => s.workoutType === wt && s.createdAt >= weekStart);
-    const typeSessionsLastWeek = recentSummaries.filter(
-      (s) => s.workoutType === wt && s.createdAt >= lastWeekStart && s.createdAt < weekStart,
-    );
-
-    return {
-      workoutType: wt,
-      lastSession: last ? summarizeSession(last) : null,
-      workoutsThisWeek: typeSessionsThisWeek.length,
-      volumeThisWeek: typeSessionsThisWeek.reduce((sum, s) => sum + s.volume, 0),
-      volumeLastWeek: typeSessionsLastWeek.reduce((sum, s) => sum + s.volume, 0),
-      exerciseCount: exerciseCountByType.get(wt) ?? 0,
-    };
-  });
 
   const sessionsThisWeek = recentSummaries.filter((s) => s.createdAt >= weekStart);
   const sessionsLastWeek = recentSummaries.filter((s) => s.createdAt >= lastWeekStart && s.createdAt < weekStart);
 
-  // Current calendar week, Monday through Sunday.
+  // Current calendar week, Monday through Sunday. Each day shows the union of every
+  // muscle group trained across that day's sessions, in canonical order.
   const mondayKey = weekStart.getTime();
-  const trainedByDay = new Map<number, WorkoutType[]>();
+  const trainedByDay = new Map<number, Set<MuscleGroup>>();
   for (const s of recentSummaries) {
     const key = dayKey(s.createdAt);
     if (key < mondayKey || key >= mondayKey + 7 * DAY_MS) continue;
-    const types = trainedByDay.get(key) ?? [];
-    if (!types.includes(s.workoutType)) types.push(s.workoutType);
-    trainedByDay.set(key, types);
+    const groups = trainedByDay.get(key) ?? new Set<MuscleGroup>();
+    for (const g of s.muscleGroups) groups.add(g);
+    trainedByDay.set(key, groups);
   }
   const weekActivity: DayActivity[] = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(mondayKey + i * DAY_MS);
-    return { date, workoutTypes: trainedByDay.get(date.getTime()) ?? [] };
+    const groups = trainedByDay.get(date.getTime());
+    return { date, muscleGroups: groups ? MUSCLE_GROUPS.filter((g) => groups.has(g)) : [] };
   });
 
   return {
-    types,
     streakDays: computeStreak(streakDates.map((d) => d.createdAt)),
     workoutsThisWeek: sessionsThisWeek.length,
     workoutsLastWeek: sessionsLastWeek.length,
@@ -235,9 +198,9 @@ function computeStreak(dates: Date[]): number {
 }
 
 const cachedGetSessionHistory = unstable_cache(
-  async (workoutType: WorkoutType) => {
+  async (group: MuscleGroup) => {
     const sessions = await prisma.session.findMany({
-      where: { workoutType, ...LOGGED_SESSION_WHERE },
+      where: { muscleGroups: { has: group }, ...LOGGED_SESSION_WHERE },
       include: { entries: { include: { exercise: true, sets: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -247,15 +210,15 @@ const cachedGetSessionHistory = unstable_cache(
   { tags: [GYM_DATA_TAG] },
 );
 
-export async function getSessionHistory(workoutType: WorkoutType) {
-  return reviveDates(await cachedGetSessionHistory(workoutType));
+export async function getSessionHistory(group: MuscleGroup) {
+  return reviveDates(await cachedGetSessionHistory(group));
 }
 
 const cachedGetExerciseCatalog = unstable_cache(
-  async (workoutType: WorkoutType) => {
+  async (groups: MuscleGroup[]) => {
     return prisma.exercise.findMany({
-      where: { workoutType },
-      select: { id: true, name: true },
+      where: { muscleGroup: { in: groups } },
+      select: { id: true, name: true, muscleGroup: true },
       orderBy: { name: "asc" },
     });
   },
@@ -263,8 +226,8 @@ const cachedGetExerciseCatalog = unstable_cache(
   { tags: [GYM_DATA_TAG] },
 );
 
-export async function getExerciseCatalog(workoutType: WorkoutType) {
-  return reviveDates(await cachedGetExerciseCatalog(workoutType));
+export async function getExerciseCatalog(groups: MuscleGroup[]) {
+  return reviveDates(await cachedGetExerciseCatalog(groups));
 }
 
 // Every logged entry for a workout type, newest first — covers both exercises already
@@ -272,9 +235,9 @@ export async function getExerciseCatalog(workoutType: WorkoutType) {
 // available to add (need the latest one overall). One query instead of two lets it run
 // in the same Promise.all as the catalog/PR lookups, instead of waiting on the catalog
 // result first to know which exercise ids to ask about.
-async function latestLoggedEntriesByWorkoutType(workoutType: WorkoutType) {
+async function latestLoggedEntriesByMuscleGroups(groups: MuscleGroup[]) {
   return prisma.sessionEntry.findMany({
-    where: { exercise: { workoutType }, sets: { some: {} } },
+    where: { exercise: { muscleGroup: { in: groups } }, sets: { some: {} } },
     include: { sets: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
@@ -319,18 +282,18 @@ async function _getSessionDetail(id: string) {
   if (!session) return null;
 
   const exerciseIds = session.entries.map((e) => e.exerciseId);
-  const [workoutTypeEntries, prByExercise, catalog] = await Promise.all([
-    latestLoggedEntriesByWorkoutType(session.workoutType),
+  const [groupEntries, prByExercise, catalog] = await Promise.all([
+    latestLoggedEntriesByMuscleGroups(session.muscleGroups),
     personalBestByExercise(exerciseIds),
-    getExerciseCatalog(session.workoutType),
+    getExerciseCatalog(session.muscleGroups),
   ]);
 
-  // workoutTypeEntries is sorted newest-first, so the first entry seen per exercise id
+  // groupEntries is sorted newest-first, so the first entry seen per exercise id
   // is its latest — for "available" exercises that's the latest overall, for exercises
   // already in this session it's the latest one strictly before it started.
   const previousByExercise = new Map<string, { createdAt: Date; sets: { weight: number; reps: number }[] }>();
   const previousByAvailableExercise = new Map<string, { createdAt: Date; sets: { weight: number; reps: number }[] }>();
-  for (const entry of workoutTypeEntries) {
+  for (const entry of groupEntries) {
     if (!previousByAvailableExercise.has(entry.exerciseId)) {
       previousByAvailableExercise.set(entry.exerciseId, { createdAt: entry.createdAt, sets: entry.sets });
     }
@@ -344,7 +307,7 @@ async function _getSessionDetail(id: string) {
 
   return {
     id: session.id,
-    workoutType: session.workoutType,
+    muscleGroups: session.muscleGroups,
     createdAt: session.createdAt,
     entries: session.entries.map((e) => ({
       id: e.id,
@@ -387,7 +350,7 @@ async function _getExerciseQuickInfo(id: string) {
   return {
     id: exercise.id,
     name: exercise.name,
-    workoutType: exercise.workoutType,
+    muscleGroup: exercise.muscleGroup,
     lastLog: lastEntry ? { createdAt: lastEntry.createdAt, top: topSet(lastEntry.sets) } : null,
   };
 }
@@ -438,7 +401,7 @@ async function _getExerciseDetail(id: string) {
   return {
     id: exercise.id,
     name: exercise.name,
-    workoutType: exercise.workoutType,
+    muscleGroup: exercise.muscleGroup,
     sessions: sessions.reverse(), // newest first for the history table
     chartData: sessions.map((s) => ({
       date: s.createdAt,
@@ -499,13 +462,23 @@ async function _getTrendsData(weeks = 12) {
     });
   }
 
+  // Attribute each set to its exercise's own muscle group (not the session's groups),
+  // so a combined session like chest+triceps splits correctly instead of double-counting.
   const balanceStart = new Date(now.getTime() - 30 * DAY_MS);
-  const balance = WORKOUT_TYPES.map((wt) => {
-    const sets = sessions
-      .filter((s) => s.workoutType === wt && s.createdAt >= balanceStart)
-      .flatMap((s) => s.entries.flatMap((e) => e.sets));
-    return { workoutType: wt, sets: sets.length, volume: setVolume(sets) };
-  });
+  const balanceByGroup = new Map<MuscleGroup, { sets: number; volume: number }>();
+  for (const ex of exercises) {
+    const recentSets = ex.entries.filter((e) => e.createdAt >= balanceStart).flatMap((e) => e.sets);
+    if (recentSets.length === 0) continue;
+    const cur = balanceByGroup.get(ex.muscleGroup) ?? { sets: 0, volume: 0 };
+    cur.sets += recentSets.length;
+    cur.volume += setVolume(recentSets);
+    balanceByGroup.set(ex.muscleGroup, cur);
+  }
+  const balance = MUSCLE_GROUPS.map((group) => ({
+    muscleGroup: group,
+    sets: balanceByGroup.get(group)?.sets ?? 0,
+    volume: balanceByGroup.get(group)?.volume ?? 0,
+  }));
 
   const records = exercises
     .map((ex) => {
@@ -515,7 +488,7 @@ async function _getTrendsData(weeks = 12) {
       return {
         id: ex.id,
         name: ex.name,
-        workoutType: ex.workoutType,
+        muscleGroup: ex.muscleGroup,
         weight: best.weight,
         reps: best.reps,
         est1RM: Math.round(estimate1RM(best.weight, best.reps)),

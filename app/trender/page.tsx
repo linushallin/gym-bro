@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { getTrendsData } from "@/lib/queries";
-import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_COLOR } from "@/lib/workout-types";
+import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_COLOR } from "@/lib/muscle-groups";
 import { formatVolume, formatWeight } from "@/lib/format";
 import { VolumeChart } from "@/components/volume-chart";
 import { BalanceChart } from "@/components/balance-chart";
@@ -39,9 +39,9 @@ export default async function TrenderPage() {
       </section>
 
       <section>
-        <h2 className="mb-3 text-lg font-semibold tracking-tight">Balans mellan pass</h2>
-        <p className="mb-3 text-sm text-muted">Antal set per pass, senaste 30 dagarna.</p>
-        <BalanceChart data={balance.map(({ workoutType, sets }) => ({ workoutType, sets }))} />
+        <h2 className="mb-3 text-lg font-semibold tracking-tight">Balans mellan muskelgrupper</h2>
+        <p className="mb-3 text-sm text-muted">Antal set per muskelgrupp, senaste 30 dagarna.</p>
+        <BalanceChart data={balance.map(({ muscleGroup, sets }) => ({ muscleGroup, sets }))} />
       </section>
 
       <section>
@@ -57,10 +57,10 @@ export default async function TrenderPage() {
                 className="flex items-center justify-between px-4 py-3 transition-colors hover:bg-surface-hover"
               >
                 <div className="flex items-center gap-2.5">
-                  <Trophy size={15} style={{ color: WORKOUT_TYPE_COLOR[r.workoutType].dark }} />
+                  <Trophy size={15} style={{ color: MUSCLE_GROUP_COLOR[r.muscleGroup].dark }} />
                   <div>
                     <p className="text-sm font-medium">{r.name}</p>
-                    <p className="text-xs text-subtle">{WORKOUT_TYPE_LABEL[r.workoutType]}</p>
+                    <p className="text-xs text-subtle">{MUSCLE_GROUP_LABEL[r.muscleGroup]}</p>
                   </div>
                 </div>
                 <div className="text-right">

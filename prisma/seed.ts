@@ -1,25 +1,24 @@
-import { PrismaClient, WorkoutType } from "@prisma/client";
+import { PrismaClient, MuscleGroup } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const CATALOG: Record<WorkoutType, string[]> = {
+const CATALOG: Record<MuscleGroup, string[]> = {
+  CHEST: ["Bänkpress", "Lutande bänkpress", "Hantelpress", "Cable fly"],
+  BACK: ["Marklyft", "Latsdrag", "Sittande rodd", "Pull-ups", "Ryggresning"],
   SHOULDERS: ["Axelpress", "Sidolyft", "Frontlyft", "Bakre delt", "Shrugs"],
-  BACK_BICEPS: ["Marklyft", "Latsdrag", "Sittande rodd", "Pull-ups", "Ryggresning", "Bicepscurl", "Hammercurl"],
-  CHEST_TRICEPS: ["Bänkpress", "Lutande bänkpress", "Hantelpress", "Cable fly", "Dips", "Triceps pushdown", "Franska pressar"],
+  BICEPS: ["Bicepscurl", "Hammercurl"],
+  TRICEPS: ["Triceps pushdown", "Franska pressar", "Dips"],
   LEGS: ["Knäböj", "Benpress", "Utfallssteg", "Bencurl", "Benspark", "Vadpress"],
   ABS: ["Situps", "Plankan", "Cable crunch", "Hängande benlyft", "Russian twist"],
-  ARMS: ["Bicepscurl", "Hammercurl", "Triceps pushdown", "Franska pressar", "Dips"],
-  BACK_CHEST: ["Marklyft", "Latsdrag", "Bänkpress", "Dips"],
-  SHOULDERS_ARMS: ["Axelpress", "Sidolyft", "Shrugs", "Bicepscurl", "Triceps pushdown"],
 };
 
 async function main() {
-  for (const [workoutType, names] of Object.entries(CATALOG) as [WorkoutType, string[]][]) {
+  for (const [muscleGroup, names] of Object.entries(CATALOG) as [MuscleGroup, string[]][]) {
     for (const name of names) {
       await prisma.exercise.upsert({
-        where: { name_workoutType: { name, workoutType } },
+        where: { name_muscleGroup: { name, muscleGroup } },
         update: {},
-        create: { name, workoutType },
+        create: { name, muscleGroup },
       });
     }
   }

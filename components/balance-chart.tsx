@@ -1,10 +1,10 @@
 "use client";
 
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell, LabelList } from "recharts";
-import type { WorkoutType } from "@prisma/client";
-import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_COLOR } from "@/lib/workout-types";
+import type { MuscleGroup } from "@prisma/client";
+import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_COLOR } from "@/lib/muscle-groups";
 
-type Row = { workoutType: WorkoutType; sets: number };
+type Row = { muscleGroup: MuscleGroup; sets: number };
 
 export function BalanceChart({ data }: { data: Row[] }) {
   const hasData = data.some((d) => d.sets > 0);
@@ -17,7 +17,7 @@ export function BalanceChart({ data }: { data: Row[] }) {
     );
   }
 
-  const chartData = data.map((d) => ({ ...d, label: WORKOUT_TYPE_LABEL[d.workoutType] }));
+  const chartData = data.map((d) => ({ ...d, label: MUSCLE_GROUP_LABEL[d.muscleGroup] }));
 
   return (
     <div className="h-80 rounded-xl border border-border bg-surface p-4">
@@ -50,7 +50,7 @@ export function BalanceChart({ data }: { data: Row[] }) {
           />
           <Bar dataKey="sets" radius={[0, 4, 4, 0]} maxBarSize={20}>
             {chartData.map((entry) => (
-              <Cell key={entry.workoutType} fill={WORKOUT_TYPE_COLOR[entry.workoutType].dark} />
+              <Cell key={entry.muscleGroup} fill={MUSCLE_GROUP_COLOR[entry.muscleGroup].dark} />
             ))}
             <LabelList
               dataKey="sets"

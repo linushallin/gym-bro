@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check, ChevronLeft, Plus, Trash2, X } from "lucide-react";
 import { getSessionDetail } from "@/lib/queries";
-import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_ICON, WORKOUT_TYPE_COLOR } from "@/lib/workout-types";
+import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_ICON, MUSCLE_GROUP_COLOR, sessionLabel, sortGroups } from "@/lib/muscle-groups";
 import { formatWeight, relativeDays } from "@/lib/format";
 import { addSet, deleteSet, deleteEntry, addExerciseToSession, finishSession, deleteSession } from "@/lib/actions";
 import { PrCard } from "@/components/pr-card";
@@ -20,25 +20,30 @@ export default async function SessionPage({
   const session = await getSessionDetail(id);
   if (!session) notFound();
 
-  const label = WORKOUT_TYPE_LABEL[session.workoutType];
-  const Icon = WORKOUT_TYPE_ICON[session.workoutType];
-  const color = WORKOUT_TYPE_COLOR[session.workoutType];
+  const label = sessionLabel(session.muscleGroups);
+  const groups = sortGroups(session.muscleGroups);
 
   return (
     <div className="mx-auto max-w-md space-y-6">
-      <Link
-        href={`/passtyp/${session.workoutType.toLowerCase()}`}
-        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
-      >
-        <ChevronLeft size={15} /> {label}
+      <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground">
+        <ChevronLeft size={15} /> Översikt
       </Link>
 
       <div className="flex items-center gap-3">
-        <span
-          className="flex h-11 w-11 items-center justify-center rounded-xl"
-          style={{ backgroundColor: `color-mix(in srgb, ${color.dark} 18%, transparent)`, color: color.dark }}
-        >
-          <Icon size={22} strokeWidth={2.25} />
+        <span className="flex items-center gap-1.5">
+          {groups.map((group) => {
+            const Icon = MUSCLE_GROUP_ICON[group];
+            const color = MUSCLE_GROUP_COLOR[group];
+            return (
+              <span
+                key={group}
+                className="flex h-11 w-11 items-center justify-center rounded-xl"
+                style={{ backgroundColor: `color-mix(in srgb, ${color.dark} 18%, transparent)`, color: color.dark }}
+              >
+                <Icon size={22} strokeWidth={2.25} />
+              </span>
+            );
+          })}
         </span>
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{label}</h1>
@@ -85,7 +90,7 @@ export default async function SessionPage({
           </div>
         )}
 
-        <form action={addExerciseToSession} className="flex gap-2">
+        <form action={addExerciseToSession} className="flex flex-wrap gap-2">
           <input type="hidden" name="sessionId" value={session.id} />
           <input
             type="text"
@@ -94,6 +99,20 @@ export default async function SessionPage({
             placeholder="Ny övning, t.ex. Bänkpress"
             className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
           />
+          {groups.length > 1 && (
+            <select
+              name="muscleGroup"
+              defaultValue={groups[0]}
+              aria-label="Muskelgrupp"
+              className="h-11 shrink-0 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-accent"
+            >
+              {groups.map((group) => (
+                <option key={group} value={group}>
+                  {MUSCLE_GROUP_LABEL[group]}
+                </option>
+              ))}
+            </select>
+          )}
           <button
             type="submit"
             className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover"
@@ -106,7 +125,6 @@ export default async function SessionPage({
 
       <form action={finishSession}>
         <input type="hidden" name="id" value={session.id} />
-        <input type="hidden" name="workoutType" value={session.workoutType} />
         <button
           type="submit"
           className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover"
@@ -118,7 +136,6 @@ export default async function SessionPage({
 
       <form action={deleteSession} className="flex justify-center">
         <input type="hidden" name="id" value={session.id} />
-        <input type="hidden" name="workoutType" value={session.workoutType} />
         <ConfirmSubmitButton
           confirmMessage="Ta bort hela passet? Alla loggade set försvinner permanent."
           className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-subtle transition-colors hover:text-critical"

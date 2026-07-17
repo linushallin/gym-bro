@@ -8,38 +8,37 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum WorkoutType {
+enum MuscleGroup {
+  CHEST
+  BACK
   SHOULDERS
-  BACK_BICEPS
-  CHEST_TRICEPS
+  BICEPS
+  TRICEPS
   LEGS
   ABS
-  ARMS
-  BACK_CHEST
-  SHOULDERS_ARMS
 }
 
 model Exercise {
   id          String         @id @default(cuid())
   name        String
-  workoutType WorkoutType
+  muscleGroup MuscleGroup
   createdAt   DateTime       @default(now())
   entries     SessionEntry[]
 
-  @@unique([name, workoutType])
+  @@unique([name, muscleGroup])
 }
 
-// One gym visit: picking a workout type starts a Session, and every
-// exercise logged afterwards is grouped under it until you're done.
+// One gym visit: you pick one or more muscle groups to start a Session, and
+// every exercise logged afterwards is grouped under it until you're done.
 model Session {
-  id          String         @id @default(cuid())
-  workoutType WorkoutType
-  notes       String?
-  createdAt   DateTime       @default(now())
-  finishedAt  DateTime?
-  entries     SessionEntry[]
+  id           String         @id @default(cuid())
+  muscleGroups MuscleGroup[]
+  notes        String?
+  createdAt    DateTime       @default(now())
+  finishedAt   DateTime?
+  entries      SessionEntry[]
 
-  @@index([workoutType, createdAt])
+  @@index([createdAt])
 }
 
 // One exercise performed within a Session, holding its own sets.

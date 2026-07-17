@@ -1,6 +1,6 @@
 import { Minus } from "lucide-react";
 import type { DayActivity } from "@/lib/queries";
-import { WORKOUT_TYPE_LABEL, WORKOUT_TYPE_ICON, WORKOUT_TYPE_COLOR } from "@/lib/workout-types";
+import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_ICON, MUSCLE_GROUP_COLOR } from "@/lib/muscle-groups";
 import { formatWeekday, daysSince } from "@/lib/format";
 
 export function WeekActivity({ days, weekNumber }: { days: DayActivity[]; weekNumber: number }) {
@@ -15,7 +15,7 @@ export function WeekActivity({ days, weekNumber }: { days: DayActivity[]; weekNu
           const diff = daysSince(day.date);
           const isToday = diff === 0;
           const isFuture = diff < 0;
-          const label = day.workoutTypes.map((wt) => WORKOUT_TYPE_LABEL[wt]).join(" / ");
+          const label = day.muscleGroups.map((g) => MUSCLE_GROUP_LABEL[g]).join(" / ");
 
           return (
             <div
@@ -28,14 +28,14 @@ export function WeekActivity({ days, weekNumber }: { days: DayActivity[]; weekNu
                 {formatWeekday(day.date)} {day.date.getDate()}
               </span>
 
-              {day.workoutTypes.length > 0 ? (
+              {day.muscleGroups.length > 0 ? (
                 <div className="flex flex-wrap items-center justify-center gap-1">
-                  {day.workoutTypes.map((wt) => {
-                    const Icon = WORKOUT_TYPE_ICON[wt];
-                    const color = WORKOUT_TYPE_COLOR[wt];
+                  {day.muscleGroups.map((g) => {
+                    const Icon = MUSCLE_GROUP_ICON[g];
+                    const color = MUSCLE_GROUP_COLOR[g];
                     return (
                       <span
-                        key={wt}
+                        key={g}
                         className="flex h-7 w-7 items-center justify-center rounded-full sm:h-8 sm:w-8"
                         style={{
                           backgroundColor: `color-mix(in srgb, ${color.dark} 22%, transparent)`,

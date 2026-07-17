@@ -18,7 +18,7 @@ export function WeightChart({ data }: { data: Point[] }) {
   return (
     <div className="h-64 rounded-xl border border-border bg-surface p-4">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+        <LineChart data={data} margin={{ top: 8, right: 16, left: 4, bottom: 0 }}>
           <CartesianGrid stroke="var(--border)" vertical={false} strokeWidth={1} />
           <XAxis
             dataKey="date"
@@ -28,15 +28,16 @@ export function WeightChart({ data }: { data: Point[] }) {
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
             minTickGap={24}
+            padding={{ left: 8, right: 16 }}
           />
           <YAxis
             stroke="var(--subtle)"
             tick={{ fontSize: 11, fill: "var(--subtle)" }}
             tickLine={false}
             axisLine={false}
-            width={36}
+            width={48}
             domain={["dataMin - 1", "dataMax + 1"]}
-            unit=" kg"
+            tickFormatter={(v) => `${v} kg`}
           />
           <Tooltip
             labelFormatter={(v) => dateFmt.format(new Date(v))}

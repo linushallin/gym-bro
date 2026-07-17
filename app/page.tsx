@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { Flame, Scale, TrendingDown, TrendingUp } from "lucide-react";
+import { Flame, Plus, Scale, TrendingDown, TrendingUp } from "lucide-react";
 import { getDashboardData, getWeightData } from "@/lib/queries";
-import { WorkoutTypeCard } from "@/components/workout-type-card";
 import { WeekActivity } from "@/components/week-activity";
 import { StatTile } from "@/components/stat-tile";
 import { formatVolume, formatWeight } from "@/lib/format";
@@ -14,6 +13,14 @@ export default async function Home() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Översikt</h1>
       </div>
+
+      <Link
+        href="/logga"
+        className="flex h-16 w-full items-center justify-center gap-2.5 rounded-xl bg-good text-lg font-semibold text-accent-foreground shadow-[0_0_28px_-6px_var(--good)] transition-transform hover:brightness-105 active:scale-[0.99]"
+      >
+        <Plus size={22} strokeWidth={2.5} />
+        Starta nytt pass
+      </Link>
 
       <WeekActivity days={data.weekActivity} weekNumber={data.weekNumber} />
 
@@ -56,17 +63,6 @@ export default async function Home() {
           </span>
         )}
       </Link>
-
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-lg font-semibold tracking-tight">Pass</h2>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {data.types.map((summary) => (
-            <WorkoutTypeCard key={summary.workoutType} summary={summary} />
-          ))}
-        </div>
-      </section>
     </div>
   );
 }
