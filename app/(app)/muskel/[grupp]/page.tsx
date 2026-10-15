@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { getSessionHistory } from "@/lib/queries";
 import { requireUser } from "@/lib/auth";
 import {
@@ -11,8 +11,7 @@ import {
   sessionLabel,
 } from "@/lib/muscle-groups";
 import { formatDateTime, formatVolume, formatWeight } from "@/lib/format";
-import { startSession, deleteSession } from "@/lib/actions";
-import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { startSession } from "@/lib/actions";
 
 export default async function MuscleGroupPage({
   params,
@@ -52,10 +51,10 @@ export default async function MuscleGroupPage({
           <input type="hidden" name="muscleGroups" value={group} />
           <button
             type="submit"
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover sm:w-auto"
+            className="flex h-12 w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover sm:w-auto"
           >
             <Plus size={16} strokeWidth={2.5} />
-            Logga
+            Logga pass
           </button>
         </form>
       </div>
@@ -67,38 +66,28 @@ export default async function MuscleGroupPage({
       ) : (
         <div className="divide-y divide-border rounded-xl border border-border bg-surface">
           {sessions.map((s) => (
-            <div key={s.id} className="relative flex items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover">
-              <Link href={`/pass/${s.id}`} className="absolute inset-0" aria-label={formatDateTime(s.createdAt)} />
-
+            <Link
+              key={s.id}
+              href={`/pass/${s.id}`}
+              className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-hover active:bg-surface-hover"
+            >
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">{formatDateTime(s.createdAt)}</p>
-                <p className="text-xs text-muted">{sessionLabel(s.muscleGroups)}</p>
-                <p className="mt-0.5 truncate text-xs text-subtle">{s.exerciseNames.join(", ")}</p>
+                <p className="text-sm font-semibold">{formatDateTime(s.createdAt)}</p>
+                <p className="mt-0.5 truncate text-xs text-muted">{sessionLabel(s.muscleGroups)}</p>
+                <p className="truncate text-xs text-subtle">{s.exerciseNames.join(", ")}</p>
               </div>
-              <div className="shrink-0 text-right text-xs text-muted">
-                <p>
-                  {s.setCount} set · {formatVolume(s.volume)}
+              <div className="shrink-0 text-right">
+                <p className="text-sm font-medium tabular-nums">
+                  {s.setCount} set <span className="font-normal text-muted">· {formatVolume(s.volume)}</span>
                 </p>
                 {s.top && (
-                  <p className="text-subtle">
+                  <p className="mt-0.5 text-xs tabular-nums text-subtle">
                     Topp {formatWeight(s.top.weight)} kg × {s.top.reps}
                   </p>
                 )}
               </div>
-
-              <form action={deleteSession} className="relative z-10 shrink-0">
-                <input type="hidden" name="id" value={s.id} />
-                <ConfirmSubmitButton
-                  confirmMessage="Ta bort det här passet? Alla loggade set försvinner permanent."
-                  ariaLabel="Ta bort pass"
-                  className="flex h-9 w-9 items-center justify-center rounded-md text-subtle transition-colors hover:bg-surface-hover hover:text-critical"
-                >
-                  <Trash2 size={15} />
-                </ConfirmSubmitButton>
-              </form>
-
-              <ChevronRight size={14} className="shrink-0 text-subtle" />
-            </div>
+              <ChevronRight size={16} className="shrink-0 text-subtle" aria-hidden />
+            </Link>
           ))}
         </div>
       )}

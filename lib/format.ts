@@ -40,11 +40,12 @@ export function estimate1RM(weight: number, reps: number): number {
   return weight * (1 + reps / 30);
 }
 
+// Swedish decimal comma: 92,5 kg, 1,8 ton.
 export function formatWeight(n: number): string {
-  return Number.isInteger(n) ? `${n}` : n.toFixed(1).replace(/\.0$/, "");
+  return (Number.isInteger(n) ? `${n}` : n.toFixed(1).replace(/\.0$/, "")).replace(".", ",");
 }
 
 export function formatVolume(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "")} ton`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, "").replace(".", ",")} ton`;
   return `${Math.round(n)} kg`;
 }

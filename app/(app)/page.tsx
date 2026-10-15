@@ -42,7 +42,7 @@ export default async function Home() {
 
       <Link
         href="/vikt"
-        className="flex items-center justify-between rounded-xl border border-border bg-surface p-4 transition-colors hover:border-white/15 hover:bg-surface-hover"
+        className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface p-4 transition-colors hover:border-white/15 hover:bg-surface-hover active:bg-surface-hover"
       >
         <div className="flex items-center gap-2.5">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
@@ -50,16 +50,16 @@ export default async function Home() {
           </span>
           <div>
             <p className="text-xs text-muted sm:text-sm">Vikt</p>
-            <p className="mt-0.5 font-mono text-lg font-semibold tracking-tight">
+            <p className="mt-0.5 text-lg font-semibold tracking-tight">
               {weight.latest !== null ? `${formatWeight(weight.latest)} kg` : "Inget loggat än"}
             </p>
           </div>
         </div>
         {weight.weekChange !== null && weight.weekChange !== 0 && (
-          <span className="inline-flex items-center gap-1 text-xs font-medium text-muted">
+          <span className="inline-flex shrink-0 items-center gap-1 text-right text-xs font-medium text-muted">
             {weight.weekChange > 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
             {weight.weekChange > 0 ? "+" : ""}
-            {formatWeight(weight.weekChange)} kg senaste 7 dagarna
+            {formatWeight(weight.weekChange)} kg på 7 dagar
           </span>
         )}
       </Link>

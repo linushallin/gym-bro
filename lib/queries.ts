@@ -347,7 +347,7 @@ async function _getExerciseDetail(userId: string, id: string) {
     id: exercise.id,
     name: exercise.name,
     muscleGroup: exercise.muscleGroup,
-    sessions: sessions.reverse(), // newest first for the history table
+    sessions: [...sessions].reverse(), // newest first for the history table (copy: chartData below needs oldest first)
     chartData: sessions.map((s) => ({
       date: s.createdAt,
       topWeight: s.topWeight,

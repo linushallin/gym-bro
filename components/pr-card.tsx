@@ -26,13 +26,13 @@ export function PrCard({ pr }: { pr: { weight: number; reps: number; date: Date 
           <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: GOLD }}>
             Personbästa
           </p>
-          <p className="font-mono text-xl font-bold leading-tight tracking-tight">
+          <p className="text-xl font-bold leading-tight tracking-tight">
             {formatWeight(pr.weight)} kg <span className="text-sm font-medium text-subtle">× {pr.reps}</span>
           </p>
         </div>
         <div className="shrink-0 text-right">
           <p className="text-xs text-subtle">{relativeDays(pr.date)}</p>
-          <p className="mt-0.5 font-mono text-xs text-subtle">~{est1RM} kg 1RM</p>
+          <p className="mt-0.5 tabular-nums text-xs text-subtle">~{est1RM} kg 1RM</p>
         </div>
       </div>
     </div>

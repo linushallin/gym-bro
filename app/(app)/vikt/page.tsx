@@ -22,19 +22,19 @@ export default async function ViktPage() {
           <label className="flex-1">
             <span className="mb-1 block text-xs text-muted">Vikt idag (kg)</span>
             <input
-              type="number"
+              type="text"
               inputMode="decimal"
+              pattern="[0-9]+([.,][0-9]+)?"
+              autoComplete="off"
               name="weight"
-              step="0.1"
-              min="0"
               required
-              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
-              placeholder="t.ex. 82.4"
+              className="h-12 w-full rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+              placeholder="t.ex. 82,4"
             />
           </label>
           <button
             type="submit"
-            className="flex h-11 shrink-0 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover"
+            className="flex h-12 shrink-0 items-center rounded-lg bg-accent px-5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover"
           >
             Logga
           </button>
@@ -53,7 +53,7 @@ export default async function ViktPage() {
               <div key={e.id} className="flex items-center justify-between px-4 py-3">
                 <p className="text-sm font-medium">{formatDateTime(e.createdAt)}</p>
                 <div className="flex items-center gap-2">
-                  <p className="font-mono text-sm text-muted">{formatWeight(e.weight)} kg</p>
+                  <p className="tabular-nums text-sm text-muted">{formatWeight(e.weight)} kg</p>
                   <form action={deleteWeightEntry}>
                     <input type="hidden" name="id" value={e.id} />
                     <ConfirmSubmitButton

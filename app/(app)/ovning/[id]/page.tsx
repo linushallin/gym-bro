@@ -48,10 +48,10 @@ export default async function ExercisePage({
           <input type="hidden" name="exerciseId" value={exercise.id} />
           <button
             type="submit"
-            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover sm:w-auto"
+            className="flex h-12 w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover sm:w-auto"
           >
             <Plus size={16} strokeWidth={2.5} />
-            Logga
+            Logga övningen
           </button>
         </form>
       </div>
@@ -59,18 +59,18 @@ export default async function ExercisePage({
       <section className="grid grid-cols-3 gap-2.5 sm:gap-3">
         <div className="rounded-xl border border-border bg-surface p-3 sm:p-4">
           <p className="text-xs text-muted sm:text-sm">Personbästa</p>
-          <p className="mt-1.5 font-mono text-lg font-semibold tracking-tight sm:text-xl">
+          <p className="mt-1.5 tabular-nums text-lg font-semibold tracking-tight sm:text-xl">
             {exercise.pr ? `${formatWeight(exercise.pr.weight)} kg` : "–"}
           </p>
           {exercise.pr && <p className="text-xs text-subtle">× {exercise.pr.reps} reps</p>}
         </div>
         <div className="rounded-xl border border-border bg-surface p-3 sm:p-4">
           <p className="text-xs text-muted sm:text-sm">Beräknat 1RM</p>
-          <p className="mt-1.5 font-mono text-lg font-semibold tracking-tight sm:text-xl">{exercise.best1RM || "–"} kg</p>
+          <p className="mt-1.5 tabular-nums text-lg font-semibold tracking-tight sm:text-xl">{exercise.best1RM || "–"} kg</p>
         </div>
         <div className="rounded-xl border border-border bg-surface p-3 sm:p-4">
-          <p className="text-xs text-muted sm:text-sm">Bästa volym/pass</p>
-          <p className="mt-1.5 font-mono text-lg font-semibold tracking-tight sm:text-xl">{formatVolume(exercise.bestVolumeSession)}</p>
+          <p className="text-xs text-muted sm:text-sm">Bästa volym</p>
+          <p className="mt-1.5 tabular-nums text-lg font-semibold tracking-tight sm:text-xl">{formatVolume(exercise.bestVolumeSession)}</p>
         </div>
       </section>
 
@@ -97,11 +97,11 @@ export default async function ExercisePage({
                       {formatDateTime(s.createdAt)}
                       {isPR && <Trophy size={13} className="text-good" />}
                     </p>
-                    <p className="mt-0.5 font-mono text-xs text-subtle">
+                    <p className="mt-0.5 tabular-nums text-xs text-subtle">
                       {s.sets.map((set) => `${formatWeight(set.weight)}×${set.reps}`).join(", ")}
                     </p>
                   </div>
-                  <p className="font-mono text-xs text-muted">{formatVolume(s.volume)}</p>
+                  <p className="tabular-nums text-xs text-muted">{formatVolume(s.volume)}</p>
                 </div>
               );
             })}

@@ -5,9 +5,10 @@ import { getSessionDetail } from "@/lib/queries";
 import { requireUser } from "@/lib/auth";
 import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_ICON, MUSCLE_GROUP_COLOR, sessionLabel, sortGroups } from "@/lib/muscle-groups";
 import { formatWeight, relativeDays } from "@/lib/format";
-import { addSet, deleteSet, deleteEntry, addExerciseToSession, finishSession, deleteSession } from "@/lib/actions";
+import { deleteSet, deleteEntry, addExerciseToSession, finishSession, deleteSession } from "@/lib/actions";
 import { PrCard } from "@/components/pr-card";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { SetLogger } from "@/components/set-logger";
 
 type SessionDetail = NonNullable<Awaited<ReturnType<typeof getSessionDetail>>>;
 type Entry = SessionDetail["entries"][number];
@@ -76,11 +77,11 @@ export default async function SessionPage({
                 <input type="hidden" name="exerciseId" value={ex.id} />
                 <button
                   type="submit"
-                  className="flex w-full items-center justify-between rounded-lg border border-border px-3.5 py-2.5 text-left text-sm transition-colors hover:border-accent hover:text-accent"
+                  className="flex min-h-12 w-full items-center justify-between gap-3 rounded-lg border border-border px-3.5 py-2.5 text-left text-sm transition-colors hover:border-accent hover:text-accent active:bg-surface-hover"
                 >
                   <span className="font-medium">{ex.name}</span>
                   {ex.previous ? (
-                    <span className="font-mono text-xs text-subtle">
+                    <span className="shrink-0 tabular-nums text-xs text-subtle">
                       {ex.previous.sets.map((s) => `${formatWeight(s.weight)}×${s.reps}`).join(", ")}
                     </span>
                   ) : (
@@ -92,37 +93,41 @@ export default async function SessionPage({
           </div>
         )}
 
-        <form action={addExerciseToSession} className="flex flex-wrap gap-2">
+        <form action={addExerciseToSession} className="space-y-2">
           <input type="hidden" name="sessionId" value={session.id} />
           <input
             type="text"
             name="name"
             required
             maxLength={80}
-            placeholder="Ny övning, t.ex. Bänkpress"
-            className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+            autoCapitalize="sentences"
+            placeholder="Eller skriv en ny övning…"
+            aria-label="Namn på ny övning"
+            className="h-12 w-full rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
           />
-          {groups.length > 1 && (
-            <select
-              name="muscleGroup"
-              defaultValue={groups[0]}
-              aria-label="Muskelgrupp"
-              className="h-11 shrink-0 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-accent"
+          <div className="flex gap-2">
+            {groups.length > 1 && (
+              <select
+                name="muscleGroup"
+                defaultValue={groups[0]}
+                aria-label="Muskelgrupp"
+                className="h-12 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
+              >
+                {groups.map((group) => (
+                  <option key={group} value={group}>
+                    {MUSCLE_GROUP_LABEL[group]}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button
+              type="submit"
+              className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-lg border border-accent/40 bg-accent/10 px-4 text-sm font-semibold text-accent transition-colors hover:bg-accent/20"
             >
-              {groups.map((group) => (
-                <option key={group} value={group}>
-                  {MUSCLE_GROUP_LABEL[group]}
-                </option>
-              ))}
-            </select>
-          )}
-          <button
-            type="submit"
-            className="flex h-11 shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover"
-          >
-            <Plus size={16} strokeWidth={2.5} />
-            Lägg till
-          </button>
+              <Plus size={16} strokeWidth={2.5} />
+              Lägg till övning
+            </button>
+          </div>
         </form>
       </div>
 
@@ -130,7 +135,7 @@ export default async function SessionPage({
         <input type="hidden" name="id" value={session.id} />
         <button
           type="submit"
-          className="flex h-11 w-full items-center justify-center gap-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover"
+          className="flex h-12 w-full items-center justify-center gap-1.5 rounded-lg border border-border text-sm font-semibold hover:bg-surface-hover active:bg-surface-hover"
         >
           <Check size={16} />
           Klar med passet
@@ -141,7 +146,7 @@ export default async function SessionPage({
         <input type="hidden" name="id" value={session.id} />
         <ConfirmSubmitButton
           confirmMessage="Ta bort hela passet? Alla loggade set försvinner permanent."
-          className="flex h-9 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-subtle transition-colors hover:text-critical"
+          className="flex h-11 items-center gap-1.5 rounded-lg px-3 text-xs font-medium text-subtle transition-colors hover:text-critical"
         >
           <Trash2 size={13} />
           Ta bort passet
@@ -157,8 +162,8 @@ function EntryCard({ entry }: { entry: Entry }) {
 
   return (
     <div className="rounded-xl border border-border bg-surface">
-      <div className="flex items-center justify-between border-b border-border px-4 py-3">
-        <Link href={`/ovning/${entry.exerciseId}`} className="text-sm font-semibold hover:underline">
+      <div className="flex min-h-14 items-center justify-between border-b border-border px-4 py-1.5">
+        <Link href={`/ovning/${entry.exerciseId}`} className="py-1 text-base font-semibold hover:underline">
           {entry.exerciseName}
         </Link>
         {entry.sets.length === 0 && (
@@ -166,7 +171,7 @@ function EntryCard({ entry }: { entry: Entry }) {
             <input type="hidden" name="id" value={entry.id} />
             <button
               type="submit"
-              className="flex h-9 w-9 items-center justify-center rounded-md text-subtle transition-colors hover:bg-surface-hover hover:text-critical"
+              className="-mr-2 flex h-11 w-11 items-center justify-center rounded-md text-subtle transition-colors hover:bg-surface-hover hover:text-critical"
               aria-label="Ta bort övning"
             >
               <X size={15} />
@@ -187,11 +192,13 @@ function EntryCard({ entry }: { entry: Entry }) {
       {entry.sets.length > 0 && (
         <ul className="divide-y divide-border">
           {entry.sets.map((s, i) => (
-            <li key={s.id} className="flex items-center justify-between py-1 pl-4 pr-2">
-              <span className="text-sm">
-                <span className="text-subtle">Set {i + 1}</span>{" "}
-                <span className="font-mono font-medium">
-                  {formatWeight(s.weight)} kg × {s.reps}
+            <li key={s.id} className="flex items-center justify-between py-0.5 pl-4 pr-1.5">
+              <span className="flex items-center gap-3">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-background text-xs font-medium tabular-nums text-subtle">
+                  {i + 1}
+                </span>
+                <span className="text-base font-semibold tabular-nums">
+                  {formatWeight(s.weight)} <span className="text-sm font-normal text-muted">kg</span> × {s.reps}
                 </span>
               </span>
               <form action={deleteSet}>
@@ -209,43 +216,11 @@ function EntryCard({ entry }: { entry: Entry }) {
         </ul>
       )}
 
-      <form action={addSet} className="p-3">
-        <input type="hidden" name="sessionEntryId" value={entry.id} />
-        <div className="flex items-end gap-2">
-          <label className="flex-1">
-            <span className="mb-1 block text-xs text-muted">Vikt (kg)</span>
-            <input
-              type="number"
-              inputMode="decimal"
-              name="weight"
-              step="0.5"
-              min="0"
-              required
-              defaultValue={referenceSet?.weight}
-              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
-            />
-          </label>
-          <label className="flex-1">
-            <span className="mb-1 block text-xs text-muted">Reps</span>
-            <input
-              type="number"
-              inputMode="numeric"
-              name="reps"
-              step="1"
-              min="1"
-              required
-              defaultValue={referenceSet?.reps}
-              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
-            />
-          </label>
-          <button
-            type="submit"
-            className="flex h-11 shrink-0 items-center rounded-lg bg-accent px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-hover"
-          >
-            + Set
-          </button>
-        </div>
-      </form>
+      <SetLogger
+        sessionEntryId={entry.id}
+        defaultWeight={referenceSet?.weight}
+        defaultReps={referenceSet?.reps}
+      />
     </div>
   );
 }

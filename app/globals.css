@@ -54,6 +54,21 @@ body {
   color: var(--accent-foreground);
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* No double-tap-to-zoom delay on controls; pinch-zoom stays available. */
+a,
+button,
+input,
+select,
+label {
+  touch-action: manipulation;
+}
+
 /* iOS safe-area support for edge-to-edge dark UI */
 @supports (padding: max(0px)) {
   body {

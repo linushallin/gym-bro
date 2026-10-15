@@ -53,7 +53,7 @@ export function WeekActivity({ days, weekNumber }: { days: DayActivity[]; weekNu
                 </span>
               )}
 
-              <span className="line-clamp-2 text-[9px] font-medium leading-tight text-muted">
+              <span className="line-clamp-2 text-[10px] font-medium leading-tight text-muted">
                 {label || (isFuture ? "" : "Vila")}
               </span>
             </div>
