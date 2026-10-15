@@ -117,10 +117,6 @@ export type DayActivity = {
 export type DashboardData = {
   streakDays: number;
   workoutsThisWeek: number;
-  workoutsLastWeek: number;
-  volumeThisWeek: number;
-  volumeLastWeek: number;
-  setsThisWeek: number;
   weekNumber: number;
   weekActivity: DayActivity[];
 };
@@ -135,18 +131,15 @@ export const getDashboardData = cachedPerUser(
 
 async function _getDashboardData(userId: string): Promise<DashboardData> {
   const now = new Date();
-  const twoWeeksAgo = new Date(now.getTime() - 14 * DAY_MS);
   // Calendar week (Monday-Sunday), matching weekActivity/weekNumber below —
   // not a rolling 7-day window, which would still show mostly last week's
   // data on a Monday.
   const weekStart = new Date(mondayOfWeek(now));
-  const lastWeekStart = new Date(mondayOfWeek(now) - 7 * DAY_MS);
 
-  const [recentSessions, streakDates] = await Promise.all([
+  const [sessionsThisWeek, streakDates] = await Promise.all([
     prisma.session.findMany({
-      where: { userId, createdAt: { gte: twoWeeksAgo }, ...LOGGED_SESSION_WHERE },
-      include: { entries: { include: { exercise: true, sets: true } } },
-      orderBy: { createdAt: "desc" },
+      where: { userId, createdAt: { gte: weekStart }, ...LOGGED_SESSION_WHERE },
+      select: { createdAt: true, muscleGroups: true },
     }),
     prisma.session.findMany({
       where: { userId, ...LOGGED_SESSION_WHERE },
@@ -156,16 +149,11 @@ async function _getDashboardData(userId: string): Promise<DashboardData> {
     }),
   ]);
 
-  const recentSummaries = recentSessions.map(summarizeSession);
-
-  const sessionsThisWeek = recentSummaries.filter((s) => s.createdAt >= weekStart);
-  const sessionsLastWeek = recentSummaries.filter((s) => s.createdAt >= lastWeekStart && s.createdAt < weekStart);
-
   // Current calendar week, Monday through Sunday. Each day shows the union of every
   // muscle group trained across that day's sessions, in canonical order.
   const mondayKey = weekStart.getTime();
   const trainedByDay = new Map<number, Set<MuscleGroup>>();
-  for (const s of recentSummaries) {
+  for (const s of sessionsThisWeek) {
     const key = dayKey(s.createdAt);
     if (key < mondayKey || key >= mondayKey + 7 * DAY_MS) continue;
     const groups = trainedByDay.get(key) ?? new Set<MuscleGroup>();
@@ -181,10 +169,6 @@ async function _getDashboardData(userId: string): Promise<DashboardData> {
   return {
     streakDays: computeStreak(streakDates.map((d) => d.createdAt)),
     workoutsThisWeek: sessionsThisWeek.length,
-    workoutsLastWeek: sessionsLastWeek.length,
-    volumeThisWeek: sessionsThisWeek.reduce((sum, s) => sum + s.volume, 0),
-    volumeLastWeek: sessionsLastWeek.reduce((sum, s) => sum + s.volume, 0),
-    setsThisWeek: sessionsThisWeek.reduce((sum, s) => sum + s.setCount, 0),
     weekNumber: isoWeekNumber(now),
     weekActivity,
   };
@@ -378,9 +362,31 @@ async function _getExerciseDetail(userId: string, id: string) {
 
 export type WeeklyBucket = {
   weekStart: Date;
-  volume: number;
+  weekNumber: number;
   workouts: number;
   sets: number;
+  volume: number;
+};
+
+export type PeriodTotals = { workouts: number; sets: number; volume: number };
+
+export type PersonalRecord = {
+  id: string;
+  name: string;
+  muscleGroup: MuscleGroup;
+  weight: number;
+  reps: number;
+  est1RM: number;
+  date: Date;
+};
+
+export type TrendsData = {
+  periodStart: Date;
+  buckets: WeeklyBucket[]; // oldest first, one per calendar week, current week last
+  current: PeriodTotals;
+  previous: PeriodTotals; // the same number of weeks immediately before the period
+  balance: { muscleGroup: MuscleGroup; sets: number; volume: number }[]; // canonical order
+  records: PersonalRecord[]; // all-time, strongest estimated 1RM first
 };
 
 export const getTrendsData = cachedPerUser(
@@ -390,48 +396,73 @@ export const getTrendsData = cachedPerUser(
   { revalidate: 300 },
 );
 
-async function _getTrendsData(userId: string, weeks: number) {
+// Everything on the trends page is scoped to the same period: the last `weeks`
+// calendar weeks (Monday-Sunday, the current week included), matching the
+// "v. 42" weeks on the overview. Personal records are all-time, but carry the
+// date they were set so the page can flag the ones that are new this period.
+async function _getTrendsData(userId: string, weeks: number): Promise<TrendsData> {
   const now = new Date();
-  const rangeStart = new Date(now.getTime() - weeks * 7 * DAY_MS);
+  const weekMs = 7 * DAY_MS;
+  const periodStartKey = mondayOfWeek(now) - (weeks - 1) * weekMs;
+  const previousStartKey = periodStartKey - weeks * weekMs;
 
   const [sessions, exercises] = await Promise.all([
     prisma.session.findMany({
-      where: { userId, createdAt: { gte: rangeStart }, ...LOGGED_SESSION_WHERE },
-      include: { entries: { include: { sets: true } } },
-      orderBy: { createdAt: "asc" },
+      where: { userId, createdAt: { gte: new Date(previousStartKey) }, ...LOGGED_SESSION_WHERE },
+      select: {
+        createdAt: true,
+        entries: {
+          select: {
+            exercise: { select: { muscleGroup: true } },
+            sets: { select: { weight: true, reps: true } },
+          },
+        },
+      },
     }),
     prisma.exercise.findMany({
       where: { userId },
-      include: { entries: { include: { sets: true } } },
+      select: {
+        id: true,
+        name: true,
+        muscleGroup: true,
+        entries: { select: { createdAt: true, sets: { select: { weight: true, reps: true } } } },
+      },
     }),
   ]);
 
-  const buckets: WeeklyBucket[] = [];
-  for (let i = weeks - 1; i >= 0; i--) {
-    const weekStart = new Date(now.getTime() - (i + 1) * 7 * DAY_MS);
-    const weekEnd = new Date(now.getTime() - i * 7 * DAY_MS);
-    const weekSessions = sessions.filter((s) => s.createdAt >= weekStart && s.createdAt < weekEnd);
-    const sets = weekSessions.flatMap((s) => s.entries.flatMap((e) => e.sets));
-    buckets.push({
-      weekStart,
-      volume: setVolume(sets),
-      workouts: weekSessions.length,
-      sets: sets.length,
-    });
+  const buckets: WeeklyBucket[] = Array.from({ length: weeks }, (_, i) => {
+    const weekStart = new Date(periodStartKey + i * weekMs);
+    return { weekStart, weekNumber: isoWeekNumber(weekStart), workouts: 0, sets: 0, volume: 0 };
+  });
+  const previous: PeriodTotals = { workouts: 0, sets: 0, volume: 0 };
+  const balanceByGroup = new Map<MuscleGroup, { sets: number; volume: number }>();
+
+  for (const session of sessions) {
+    const key = dayKey(session.createdAt);
+    const sets = session.entries.flatMap((e) => e.sets);
+    const totals = key >= periodStartKey ? buckets[Math.floor((key - periodStartKey) / weekMs)] : previous;
+    if (!totals) continue; // logged in a future week (clock skew) — ignore
+    totals.workouts += 1;
+    totals.sets += sets.length;
+    totals.volume += setVolume(sets);
+
+    if (key < periodStartKey) continue;
+    // Attribute each set to its exercise's own muscle group (not the session's groups),
+    // so a combined session like chest+triceps splits correctly instead of double-counting.
+    for (const entry of session.entries) {
+      const cur = balanceByGroup.get(entry.exercise.muscleGroup) ?? { sets: 0, volume: 0 };
+      cur.sets += entry.sets.length;
+      cur.volume += setVolume(entry.sets);
+      balanceByGroup.set(entry.exercise.muscleGroup, cur);
+    }
   }
 
-  // Attribute each set to its exercise's own muscle group (not the session's groups),
-  // so a combined session like chest+triceps splits correctly instead of double-counting.
-  const balanceStart = new Date(now.getTime() - 30 * DAY_MS);
-  const balanceByGroup = new Map<MuscleGroup, { sets: number; volume: number }>();
-  for (const ex of exercises) {
-    const recentSets = ex.entries.filter((e) => e.createdAt >= balanceStart).flatMap((e) => e.sets);
-    if (recentSets.length === 0) continue;
-    const cur = balanceByGroup.get(ex.muscleGroup) ?? { sets: 0, volume: 0 };
-    cur.sets += recentSets.length;
-    cur.volume += setVolume(recentSets);
-    balanceByGroup.set(ex.muscleGroup, cur);
-  }
+  const current: PeriodTotals = {
+    workouts: buckets.reduce((sum, b) => sum + b.workouts, 0),
+    sets: buckets.reduce((sum, b) => sum + b.sets, 0),
+    volume: buckets.reduce((sum, b) => sum + b.volume, 0),
+  };
+
   const balance = MUSCLE_GROUPS.map((group) => ({
     muscleGroup: group,
     sets: balanceByGroup.get(group)?.sets ?? 0,
@@ -439,9 +470,12 @@ async function _getTrendsData(userId: string, weeks: number) {
   }));
 
   const records = exercises
-    .map((ex) => {
-      const allSets = ex.entries.flatMap((e) => e.sets);
-      const best = topSet(allSets);
+    .map((ex): PersonalRecord | null => {
+      let best: { weight: number; reps: number; date: Date } | null = null;
+      for (const entry of ex.entries) {
+        const top = topSet(entry.sets);
+        if (top && (!best || top.weight > best.weight)) best = { ...top, date: entry.createdAt };
+      }
       if (!best) return null;
       return {
         id: ex.id,
@@ -450,12 +484,13 @@ async function _getTrendsData(userId: string, weeks: number) {
         weight: best.weight,
         reps: best.reps,
         est1RM: Math.round(estimate1RM(best.weight, best.reps)),
+        date: best.date,
       };
     })
-    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .filter((r): r is PersonalRecord => r !== null)
     .sort((a, b) => b.est1RM - a.est1RM);
 
-  return { buckets, balance, records };
+  return { periodStart: new Date(periodStartKey), buckets, current, previous, balance, records };
 }
 
 export type WeightEntry = {

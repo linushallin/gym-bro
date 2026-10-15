@@ -4,7 +4,7 @@ import { getDashboardData, getWeightData } from "@/lib/queries";
 import { requireUser } from "@/lib/auth";
 import { WeekActivity } from "@/components/week-activity";
 import { StatTile } from "@/components/stat-tile";
-import { formatVolume, formatWeight } from "@/lib/format";
+import { formatWeight } from "@/lib/format";
 
 export default async function Home() {
   const user = await requireUser();
@@ -26,7 +26,7 @@ export default async function Home() {
 
       <WeekActivity days={data.weekActivity} weekNumber={data.weekNumber} />
 
-      <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <section className="grid grid-cols-2 gap-3">
         <StatTile
           label="Streak"
           value={`${data.streakDays} ${data.streakDays === 1 ? "dag" : "dagar"}`}
@@ -38,8 +38,6 @@ export default async function Home() {
           )}
         </StatTile>
         <StatTile label="Pass denna vecka" value={String(data.workoutsThisWeek)} />
-        <StatTile label="Volym denna vecka" value={formatVolume(data.volumeThisWeek)} />
-        <StatTile label="Set denna vecka" value={String(data.setsThisWeek)} />
       </section>
 
       <Link
