@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { Flame, Plus, Scale, TrendingDown, TrendingUp } from "lucide-react";
 import { getDashboardData, getWeightData } from "@/lib/queries";
+import { requireUser } from "@/lib/auth";
 import { WeekActivity } from "@/components/week-activity";
 import { StatTile } from "@/components/stat-tile";
 import { formatVolume, formatWeight } from "@/lib/format";
 
 export default async function Home() {
-  const [data, weight] = await Promise.all([getDashboardData(), getWeightData()]);
+  const user = await requireUser();
+  const [data, weight] = await Promise.all([getDashboardData(user.id), getWeightData(user.id)]);
 
   return (
     <div className="space-y-8">

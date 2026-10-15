@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Trophy } from "lucide-react";
 import { getTrendsData } from "@/lib/queries";
+import { requireUser } from "@/lib/auth";
 import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_COLOR } from "@/lib/muscle-groups";
 import { formatVolume, formatWeight } from "@/lib/format";
 import { VolumeChart } from "@/components/volume-chart";
@@ -10,7 +11,8 @@ import { StatTile } from "@/components/stat-tile";
 const weekLabelFmt = new Intl.DateTimeFormat("sv-SE", { day: "numeric", month: "short" });
 
 export default async function TrenderPage() {
-  const { buckets, balance, records } = await getTrendsData(12);
+  const user = await requireUser();
+  const { buckets, balance, records } = await getTrendsData(user.id, 12);
 
   const totalVolume = buckets.reduce((sum, b) => sum + b.volume, 0);
   const totalWorkouts = buckets.reduce((sum, b) => sum + b.workouts, 0);

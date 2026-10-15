@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
 import { getSessionHistory } from "@/lib/queries";
+import { requireUser } from "@/lib/auth";
 import {
   MUSCLE_GROUP_LABEL,
   MUSCLE_GROUP_ICON,
@@ -22,7 +23,8 @@ export default async function MuscleGroupPage({
   const group = grupp.toUpperCase();
   if (!isMuscleGroup(group)) notFound();
 
-  const sessions = await getSessionHistory(group);
+  const user = await requireUser();
+  const sessions = await getSessionHistory(user.id, group);
   const label = MUSCLE_GROUP_LABEL[group];
   const Icon = MUSCLE_GROUP_ICON[group];
   const color = MUSCLE_GROUP_COLOR[group];

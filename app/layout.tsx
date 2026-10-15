@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Nav } from "@/components/nav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Träningsdagbok",
-  description: "Din personliga träningsdagbok — logga pass, följ trender och personbästa.",
+  description: "Logga pass, följ trender och slå personbästa.",
   appleWebApp: {
     capable: true,
     title: "Träning",
@@ -30,9 +29,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-// Every page reads live data straight from the DB and changes on every log
-// action — never prerender statically (that would need DB access at build
-// time and would bake in stale data).
+// Every page is per-user (reads the session cookie) and reads live data from
+// the DB — never prerender statically.
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({
@@ -46,10 +44,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <Nav />
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-5 pb-10 sm:px-6 sm:py-8 [padding-left:max(1rem,env(safe-area-inset-left))] [padding-right:max(1rem,env(safe-area-inset-right))]">
-          {children}
-        </main>
+        {children}
       </body>
     </html>
   );

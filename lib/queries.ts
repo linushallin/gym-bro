@@ -1,3 +1,4 @@
+import "server-only";
 import { prisma } from "@/lib/prisma";
 import type { MuscleGroup } from "@prisma/client";
 import { unstable_cache } from "next/cache";
@@ -6,11 +7,17 @@ import { estimate1RM } from "@/lib/format";
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
-// All reads are cached indefinitely and only invalidated by revalidateTag("gym-data"),
-// called from every mutating action in lib/actions.ts. Single-user app, so one broad
-// tag covering all queries is simpler than granular tags and matches how the actions
-// already treat every write as invalidating everything.
-export const GYM_DATA_TAG = "gym-data";
+// All reads are cached per user and invalidated by updateTag(userDataTag(userId)),
+// called from every mutating action in lib/actions.ts. One tag per user (rather than
+// per query) keeps invalidation simple — any write by a user refreshes all of their
+// views — while one user's writes never evict anyone else's cache entries.
+//
+// Every exported query takes the *authenticated* user's id as its first argument and
+// filters on it, so a guessed or leaked id from another account simply isn't found.
+// Callers must get userId from requireUser(), never from request input.
+export function userDataTag(userId: string) {
+  return `gym-data:${userId}`;
+}
 
 // unstable_cache serializes results to JSON to persist them, so on a cache hit it
 // hands back plain ISO strings instead of the original Date objects (a cache miss
@@ -32,6 +39,19 @@ function reviveDates<T>(value: T): T {
     return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, reviveDates(v)])) as T;
   }
   return value;
+}
+
+// unstable_cache folds the call arguments (userId first) into the cache key, and the
+// per-user tag lets that user's writes invalidate exactly their own entries.
+function cachedPerUser<A extends unknown[], R>(
+  keyPart: string,
+  fn: (userId: string, ...args: A) => Promise<R>,
+  options: { revalidate?: number } = {},
+) {
+  return async (userId: string, ...args: A): Promise<R> => {
+    const cached = unstable_cache(fn, [keyPart], { tags: [userDataTag(userId)], ...options });
+    return reviveDates(await cached(userId, ...args));
+  };
 }
 
 function setVolume(sets: { weight: number; reps: number }[]): number {
@@ -105,19 +125,15 @@ export type DashboardData = {
   weekActivity: DayActivity[];
 };
 
-const cachedGetDashboardData = unstable_cache(
+export const getDashboardData = cachedPerUser(
+  "dashboard",
   _getDashboardData,
-  ["dashboard"],
   // revalidate on a timer too, not just on write: streak/week-activity depend on
   // the current date, which moves even when nobody logs a new set.
-  { tags: [GYM_DATA_TAG], revalidate: 300 },
+  { revalidate: 300 },
 );
 
-export async function getDashboardData(): Promise<DashboardData> {
-  return reviveDates(await cachedGetDashboardData());
-}
-
-async function _getDashboardData(): Promise<DashboardData> {
+async function _getDashboardData(userId: string): Promise<DashboardData> {
   const now = new Date();
   const twoWeeksAgo = new Date(now.getTime() - 14 * DAY_MS);
   // Calendar week (Monday-Sunday), matching weekActivity/weekNumber below —
@@ -128,12 +144,12 @@ async function _getDashboardData(): Promise<DashboardData> {
 
   const [recentSessions, streakDates] = await Promise.all([
     prisma.session.findMany({
-      where: { createdAt: { gte: twoWeeksAgo }, ...LOGGED_SESSION_WHERE },
+      where: { userId, createdAt: { gte: twoWeeksAgo }, ...LOGGED_SESSION_WHERE },
       include: { entries: { include: { exercise: true, sets: true } } },
       orderBy: { createdAt: "desc" },
     }),
     prisma.session.findMany({
-      where: LOGGED_SESSION_WHERE,
+      where: { userId, ...LOGGED_SESSION_WHERE },
       select: { createdAt: true },
       orderBy: { createdAt: "desc" },
       take: 500,
@@ -197,58 +213,42 @@ function computeStreak(dates: Date[]): number {
   return streak;
 }
 
-const cachedGetSessionHistory = unstable_cache(
-  async (group: MuscleGroup) => {
-    const sessions = await prisma.session.findMany({
-      where: { muscleGroups: { has: group }, ...LOGGED_SESSION_WHERE },
-      include: { entries: { include: { exercise: true, sets: true } } },
-      orderBy: { createdAt: "desc" },
-    });
-    return sessions.map(summarizeSession);
-  },
-  ["session-history"],
-  { tags: [GYM_DATA_TAG] },
-);
+export const getSessionHistory = cachedPerUser("session-history", async (userId: string, group: MuscleGroup) => {
+  const sessions = await prisma.session.findMany({
+    where: { userId, muscleGroups: { has: group }, ...LOGGED_SESSION_WHERE },
+    include: { entries: { include: { exercise: true, sets: true } } },
+    orderBy: { createdAt: "desc" },
+  });
+  return sessions.map(summarizeSession);
+});
 
-export async function getSessionHistory(group: MuscleGroup) {
-  return reviveDates(await cachedGetSessionHistory(group));
-}
-
-const cachedGetExerciseCatalog = unstable_cache(
-  async (groups: MuscleGroup[]) => {
-    return prisma.exercise.findMany({
-      where: { muscleGroup: { in: groups } },
-      select: { id: true, name: true, muscleGroup: true },
-      orderBy: { name: "asc" },
-    });
-  },
-  ["exercise-catalog"],
-  { tags: [GYM_DATA_TAG] },
-);
-
-export async function getExerciseCatalog(groups: MuscleGroup[]) {
-  return reviveDates(await cachedGetExerciseCatalog(groups));
-}
+export const getExerciseCatalog = cachedPerUser("exercise-catalog", async (userId: string, groups: MuscleGroup[]) => {
+  return prisma.exercise.findMany({
+    where: { userId, muscleGroup: { in: groups } },
+    select: { id: true, name: true, muscleGroup: true },
+    orderBy: { name: "asc" },
+  });
+});
 
 // Every logged entry for a workout type, newest first — covers both exercises already
 // in the session (need the latest one *before* it started) and exercises still
 // available to add (need the latest one overall). One query instead of two lets it run
 // in the same Promise.all as the catalog/PR lookups, instead of waiting on the catalog
 // result first to know which exercise ids to ask about.
-async function latestLoggedEntriesByMuscleGroups(groups: MuscleGroup[]) {
+async function latestLoggedEntriesByMuscleGroups(userId: string, groups: MuscleGroup[]) {
   return prisma.sessionEntry.findMany({
-    where: { exercise: { muscleGroup: { in: groups } }, sets: { some: {} } },
+    where: { exercise: { userId, muscleGroup: { in: groups } }, sets: { some: {} } },
     include: { sets: { orderBy: { createdAt: "asc" } } },
     orderBy: { createdAt: "desc" },
   });
 }
 
-async function personalBestByExercise(exerciseIds: string[]) {
+async function personalBestByExercise(userId: string, exerciseIds: string[]) {
   const bestByExercise = new Map<string, { weight: number; reps: number; date: Date }>();
   if (exerciseIds.length === 0) return bestByExercise;
 
   const entries = await prisma.sessionEntry.findMany({
-    where: { exerciseId: { in: exerciseIds }, sets: { some: {} } },
+    where: { exerciseId: { in: exerciseIds }, exercise: { userId }, sets: { some: {} } },
     select: { exerciseId: true, createdAt: true, sets: { select: { weight: true, reps: true } } },
   });
 
@@ -263,15 +263,11 @@ async function personalBestByExercise(exerciseIds: string[]) {
   return bestByExercise;
 }
 
-const cachedGetSessionDetail = unstable_cache(_getSessionDetail, ["session-detail"], { tags: [GYM_DATA_TAG] });
+export const getSessionDetail = cachedPerUser("session-detail", _getSessionDetail);
 
-export async function getSessionDetail(id: string) {
-  return reviveDates(await cachedGetSessionDetail(id));
-}
-
-async function _getSessionDetail(id: string) {
-  const session = await prisma.session.findUnique({
-    where: { id },
+async function _getSessionDetail(userId: string, id: string) {
+  const session = await prisma.session.findFirst({
+    where: { id, userId },
     include: {
       entries: {
         include: { exercise: true, sets: { orderBy: { createdAt: "asc" } } },
@@ -283,9 +279,9 @@ async function _getSessionDetail(id: string) {
 
   const exerciseIds = session.entries.map((e) => e.exerciseId);
   const [groupEntries, prByExercise, catalog] = await Promise.all([
-    latestLoggedEntriesByMuscleGroups(session.muscleGroups),
-    personalBestByExercise(exerciseIds),
-    getExerciseCatalog(session.muscleGroups),
+    latestLoggedEntriesByMuscleGroups(userId, session.muscleGroups),
+    personalBestByExercise(userId, exerciseIds),
+    getExerciseCatalog(userId, session.muscleGroups),
   ]);
 
   // groupEntries is sorted newest-first, so the first entry seen per exercise id
@@ -324,46 +320,11 @@ async function _getSessionDetail(id: string) {
   };
 }
 
-const cachedGetExerciseQuickInfo = unstable_cache(_getExerciseQuickInfo, ["exercise-quick-info"], {
-  tags: [GYM_DATA_TAG],
-});
+export const getExerciseDetail = cachedPerUser("exercise-detail", _getExerciseDetail);
 
-export async function getExerciseQuickInfo(id: string) {
-  return reviveDates(await cachedGetExerciseQuickInfo(id));
-}
-
-async function _getExerciseQuickInfo(id: string) {
-  const exercise = await prisma.exercise.findUnique({
-    where: { id },
-    include: {
-      entries: {
-        where: { sets: { some: {} } },
-        include: { sets: true },
-        orderBy: { createdAt: "desc" },
-        take: 1,
-      },
-    },
-  });
-  if (!exercise) return null;
-
-  const lastEntry = exercise.entries[0];
-  return {
-    id: exercise.id,
-    name: exercise.name,
-    muscleGroup: exercise.muscleGroup,
-    lastLog: lastEntry ? { createdAt: lastEntry.createdAt, top: topSet(lastEntry.sets) } : null,
-  };
-}
-
-const cachedGetExerciseDetail = unstable_cache(_getExerciseDetail, ["exercise-detail"], { tags: [GYM_DATA_TAG] });
-
-export async function getExerciseDetail(id: string) {
-  return reviveDates(await cachedGetExerciseDetail(id));
-}
-
-async function _getExerciseDetail(id: string) {
-  const exercise = await prisma.exercise.findUnique({
-    where: { id },
+async function _getExerciseDetail(userId: string, id: string) {
+  const exercise = await prisma.exercise.findFirst({
+    where: { id, userId },
     include: {
       entries: {
         where: { sets: { some: {} } },
@@ -422,28 +383,25 @@ export type WeeklyBucket = {
   sets: number;
 };
 
-const cachedGetTrendsData = unstable_cache(
+export const getTrendsData = cachedPerUser(
+  "trends",
   _getTrendsData,
-  ["trends"],
   // same reasoning as getDashboardData: week bucket boundaries are relative to "now".
-  { tags: [GYM_DATA_TAG], revalidate: 300 },
+  { revalidate: 300 },
 );
 
-export async function getTrendsData(weeks = 12) {
-  return reviveDates(await cachedGetTrendsData(weeks));
-}
-
-async function _getTrendsData(weeks = 12) {
+async function _getTrendsData(userId: string, weeks: number) {
   const now = new Date();
   const rangeStart = new Date(now.getTime() - weeks * 7 * DAY_MS);
 
   const [sessions, exercises] = await Promise.all([
     prisma.session.findMany({
-      where: { createdAt: { gte: rangeStart }, ...LOGGED_SESSION_WHERE },
+      where: { userId, createdAt: { gte: rangeStart }, ...LOGGED_SESSION_WHERE },
       include: { entries: { include: { sets: true } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.exercise.findMany({
+      where: { userId },
       include: { entries: { include: { sets: true } } },
     }),
   ]);
@@ -512,14 +470,14 @@ export type WeightData = {
   weekChange: number | null; // change vs the last entry at least 7 days before the latest one
 };
 
-const cachedGetWeightData = unstable_cache(_getWeightData, ["weight"], { tags: [GYM_DATA_TAG] });
+export const getWeightData = cachedPerUser("weight", _getWeightData);
 
-export async function getWeightData(): Promise<WeightData> {
-  return reviveDates(await cachedGetWeightData());
-}
-
-async function _getWeightData(): Promise<WeightData> {
-  const entries = await prisma.bodyWeight.findMany({ orderBy: { createdAt: "desc" } });
+async function _getWeightData(userId: string): Promise<WeightData> {
+  const entries = await prisma.bodyWeight.findMany({
+    where: { userId },
+    select: { id: true, weight: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
   if (entries.length === 0) return { entries, latest: null, weekChange: null };
 
   const latest = entries[0].weight;

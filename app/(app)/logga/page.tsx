@@ -1,6 +1,9 @@
 import { MuscleGroupPicker } from "@/components/muscle-group-picker";
+import { requireUser } from "@/lib/auth";
 
-export default function LoggaPage() {
+export default async function LoggaPage() {
+  await requireUser();
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>

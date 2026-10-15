@@ -18,27 +18,33 @@ enum MuscleGroup {
   ABS
 }
 
+// userId is the Supabase Auth user id (auth.users.id). Every row a user can
+// reach hangs off an Exercise, Session or BodyWeight they own, so these
+// columns are where all authorization in lib/queries.ts and lib/actions.ts
+// is anchored.
 model Exercise {
   id          String         @id @default(cuid())
+  userId      String         @db.Uuid
   name        String
   muscleGroup MuscleGroup
   createdAt   DateTime       @default(now())
   entries     SessionEntry[]
 
-  @@unique([name, muscleGroup])
+  @@unique([userId, muscleGroup, name])
 }
 
 // One gym visit: you pick one or more muscle groups to start a Session, and
 // every exercise logged afterwards is grouped under it until you're done.
 model Session {
   id           String         @id @default(cuid())
+  userId       String         @db.Uuid
   muscleGroups MuscleGroup[]
   notes        String?
   createdAt    DateTime       @default(now())
   finishedAt   DateTime?
   entries      SessionEntry[]
 
-  @@index([createdAt])
+  @@index([userId, createdAt])
 }
 
 // One exercise performed within a Session, holding its own sets.
@@ -68,8 +74,9 @@ model WorkoutSet {
 
 model BodyWeight {
   id        String   @id @default(cuid())
+  userId    String   @db.Uuid
   weight    Float
   createdAt DateTime @default(now())
 
-  @@index([createdAt])
+  @@index([userId, createdAt])
 }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronLeft, Plus, Trophy } from "lucide-react";
 import { getExerciseDetail } from "@/lib/queries";
+import { requireUser } from "@/lib/auth";
 import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_ICON, MUSCLE_GROUP_COLOR } from "@/lib/muscle-groups";
 import { formatDateTime, formatWeight, formatVolume } from "@/lib/format";
 import { ExerciseChart } from "@/components/exercise-chart";
@@ -13,7 +14,8 @@ export default async function ExercisePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const exercise = await getExerciseDetail(id);
+  const user = await requireUser();
+  const exercise = await getExerciseDetail(user.id, id);
   if (!exercise) notFound();
 
   const label = MUSCLE_GROUP_LABEL[exercise.muscleGroup];

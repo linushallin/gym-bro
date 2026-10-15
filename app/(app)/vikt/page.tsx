@@ -1,12 +1,14 @@
 import { Trash2 } from "lucide-react";
 import { getWeightData } from "@/lib/queries";
+import { requireUser } from "@/lib/auth";
 import { logWeight, deleteWeightEntry } from "@/lib/actions";
 import { WeightChart } from "@/components/weight-chart";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { formatDateTime, formatWeight } from "@/lib/format";
 
 export default async function ViktPage() {
-  const { entries } = await getWeightData();
+  const user = await requireUser();
+  const { entries } = await getWeightData(user.id);
 
   return (
     <div className="mx-auto max-w-2xl space-y-8">

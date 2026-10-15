@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Check, ChevronLeft, Plus, Trash2, X } from "lucide-react";
 import { getSessionDetail } from "@/lib/queries";
+import { requireUser } from "@/lib/auth";
 import { MUSCLE_GROUP_LABEL, MUSCLE_GROUP_ICON, MUSCLE_GROUP_COLOR, sessionLabel, sortGroups } from "@/lib/muscle-groups";
 import { formatWeight, relativeDays } from "@/lib/format";
 import { addSet, deleteSet, deleteEntry, addExerciseToSession, finishSession, deleteSession } from "@/lib/actions";
@@ -17,7 +18,8 @@ export default async function SessionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await getSessionDetail(id);
+  const user = await requireUser();
+  const session = await getSessionDetail(user.id, id);
   if (!session) notFound();
 
   const label = sessionLabel(session.muscleGroups);
@@ -96,6 +98,7 @@ export default async function SessionPage({
             type="text"
             name="name"
             required
+            maxLength={80}
             placeholder="Ny övning, t.ex. Bänkpress"
             className="h-11 min-w-0 flex-1 rounded-lg border border-border bg-background px-3 text-base outline-none focus:border-accent"
           />

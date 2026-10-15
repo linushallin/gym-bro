@@ -8,8 +8,10 @@ import { PrismaClient } from "@prisma/client";
 //
 // connection_limit>1 lets Promise.all'd queries within one request (see
 // lib/queries.ts) actually run concurrently instead of queuing behind each
-// other on a single connection — this is a single-user app, so a handful of
-// connections is nowhere near Supabase's pool limit.
+// other on a single connection. Kept small on purpose: every serverless
+// instance gets its own pool, and the transaction pooler (port 6543)
+// multiplexes all of them onto Supabase's limited real connections — that's
+// what lets many concurrent users share one database.
 function withPgBouncerDefaults(raw: string): string {
   const url = new URL(raw);
   if (!url.searchParams.has("pgbouncer")) url.searchParams.set("pgbouncer", "true");
